@@ -34,8 +34,8 @@
       "nombre": "Generacion PDF",
       "icono": "document",
       "pasos": [
-        {"id": "pkgs_pdf",  "desc": "Instalar reportlab pypdf pillow",
-         "tipo": "pip", "paquetes": ["reportlab","pypdf","pillow"]}
+        {"id": "pkgs_pdf",  "desc": "Instalar reportlab pypdf pillow cryptography",
+         "tipo": "pip", "paquetes": ["reportlab","pypdf","pillow","cryptography"]}
       ]
     },
     {
