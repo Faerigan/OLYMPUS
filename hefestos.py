@@ -30,7 +30,9 @@ except ImportError:
 
 # ── Rutas ────────────────────────────────────────────────────────────────────
 
-_BASE_DIR = Path(__file__).parent          # D:\HEFESTOS
+# En EXE PyInstaller los datos quedan en sys._MEIPASS; en .py, junto al script
+_BASE_DIR = (Path(sys._MEIPASS) if getattr(sys, "frozen", False)
+             else Path(__file__).parent)
 sys.path.insert(0, str(_BASE_DIR))
 
 OLYMPUS_RAW = "https://raw.githubusercontent.com/Faerigan/OLYMPUS/main"
