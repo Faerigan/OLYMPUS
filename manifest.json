@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "proyecto": "OLYMPUS — Ecosistema Clinico CESFAM",
+    "repo": "https://github.com/Faerigan/OLYMPUS",
+    "raw_base": "https://raw.githubusercontent.com/Faerigan/OLYMPUS/main",
+    "licencia": "Uso exclusivo profesionales de salud certificados",
+    "ultima_actualizacion": "28.05.2026"
+  },
+  "versiones": {
+    "eclipse_t":  {"version": "3.0", "min_compatible": "2.0", "estado": "estable"},
+    "hermes":     {"version": "3.0", "vocab_version": "1.0", "estado": "estable"},
+    "helios":     {"version": "1.0", "estado": "estable"},
+    "hefestos":   {"version": "1.0", "estado": "estable"},
+    "olympus":    {"version": "1.0", "estado": "preview"}
+  },
+  "archivos": {
+    "hermes_vocab":          "hermes/hermes_vocab.json",
+    "hermes_glossary_patch": "hermes/hermes_glossary_patch.json",
+    "cie10_updates":         "eclipse/cie10_updates.csv",
+    "arsenal_updates":       "eclipse/arsenal_updates.csv",
+    "install_manifest":      "hefestos/install_manifest.json",
+    "requirements":          "hefestos/requirements.txt"
+  },
+  "alertas": []
+}

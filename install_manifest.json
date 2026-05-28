@@ -1,0 +1,66 @@
+{
+  "_version": "1.0",
+  "_fecha": "28.05.2026",
+  "python_min": "3.10",
+  "python_recomendado": "3.12",
+  "grupos": [
+    {
+      "id": "prerequisitos",
+      "nombre": "Requisitos base",
+      "icono": "gear",
+      "pasos": [
+        {"id": "python",     "desc": "Verificar Python 3.10+",     "tipo": "verificar"},
+        {"id": "pip",        "desc": "Actualizar pip + setuptools", "tipo": "pip_upgrade"}
+      ]
+    },
+    {
+      "id": "hermes",
+      "nombre": "HERMES — Transcripcion de voz",
+      "icono": "microphone",
+      "pasos": [
+        {"id": "pkgs_hermes","desc": "Instalar openai-whisper sounddevice rapidfuzz numpy",
+         "tipo": "pip", "paquetes": ["openai-whisper","sounddevice","rapidfuzz","numpy"]},
+        {"id": "modelo_base","desc": "Descargar modelo Whisper base (139 MB)",
+         "tipo": "whisper_model", "modelo": "base", "mb": 139},
+        {"id": "modelo_small","desc": "Descargar modelo Whisper small (461 MB)",
+         "tipo": "whisper_model", "modelo": "small", "mb": 461},
+        {"id": "vocab",      "desc": "Descargar vocabulario medico",
+         "tipo": "descarga", "url": "hermes/hermes_vocab.json",
+         "destino": "data/hermes_vocab.json"}
+      ]
+    },
+    {
+      "id": "pdf",
+      "nombre": "Generacion PDF",
+      "icono": "document",
+      "pasos": [
+        {"id": "pkgs_pdf",  "desc": "Instalar reportlab pypdf pillow",
+         "tipo": "pip", "paquetes": ["reportlab","pypdf","pillow"]}
+      ]
+    },
+    {
+      "id": "helios",
+      "nombre": "HELIOS — Historial laboratorio IRIS",
+      "icono": "flask",
+      "pasos": [
+        {"id": "selenium",  "desc": "Instalar selenium",
+         "tipo": "pip", "paquetes": ["selenium"]},
+        {"id": "firefox",   "desc": "Verificar Firefox instalado",
+         "tipo": "verificar_app", "app": "firefox"},
+        {"id": "geckodriver","desc": "Descargar geckodriver compatible",
+         "tipo": "geckodriver"}
+      ]
+    },
+    {
+      "id": "eclipse",
+      "nombre": "ECLIPSE-T",
+      "icono": "star",
+      "pasos": [
+        {"id": "datos",     "desc": "Generar catalogos CIE-10 y arsenal",
+         "tipo": "script",  "script": "scripts/generar_datos_clinicos.py"},
+        {"id": "check",     "desc": "Verificar arranque ECLIPSE-T",
+         "tipo": "test_arranque"}
+      ]
+    }
+  ]
+}
