@@ -21,6 +21,26 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
+# ── Logo PNG embebido ─────────────────────────────────────────────────────────
+
+def _cargar_logo_tk(height: int = 180) -> "tk.PhotoImage | None":
+    """Carga HEFESTOS.png desde Resources/. Devuelve None si no esta disponible."""
+    png = _BASE_DIR / "Resources" / "HEFESTOS.png"
+    if not png.exists():
+        return None
+    try:
+        from PIL import Image, ImageTk
+        img = Image.open(str(png))
+        ratio = height / img.height
+        img = img.resize((int(img.width * ratio), height), Image.LANCZOS)
+        return ImageTk.PhotoImage(img)
+    except Exception:
+        pass
+    try:
+        return tk.PhotoImage(file=str(png))
+    except Exception:
+        return None
+
 # ── Fernet (cifrado credenciales IRIS) ───────────────────────────────────────
 try:
     from cryptography.fernet import Fernet
@@ -298,6 +318,20 @@ class HefestosApp:
         self._construir_ui()
         self._detectar_eclipse()
 
+    # ── Python del sistema (no el EXE) ───────────────────────────────────────
+
+    @staticmethod
+    def _get_python() -> str:
+        """Devuelve el intérprete Python del sistema. En EXE evita usar sys.executable
+        (que apunta al propio HEFESTOS.exe y lanzaría nuevas instancias del instalador)."""
+        if getattr(sys, "frozen", False):
+            for nombre in ("python3", "python"):
+                p = shutil.which(nombre)
+                if p:
+                    return p
+            return "python"
+        return sys.executable
+
     # ── Manifiesto ───────────────────────────────────────────────────────────
 
     def _cargar_manifest(self) -> dict:
@@ -330,9 +364,13 @@ class HefestosApp:
     def _construir_inicio(self):
         fr = self._f_inicio
 
-        cv = tk.Canvas(fr, width=200, height=200, bg=BG, highlightthickness=0)
-        cv.pack(pady=(24, 0))
-        dibujar_logo(cv, 100, 100, s=1.0)
+        self._logo_img = _cargar_logo_tk(height=180)
+        if self._logo_img:
+            tk.Label(fr, image=self._logo_img, bg=BG).pack(pady=(24, 0))
+        else:
+            cv = tk.Canvas(fr, width=200, height=200, bg=BG, highlightthickness=0)
+            cv.pack(pady=(24, 0))
+            dibujar_logo(cv, 100, 100, s=1.0)
 
         tk.Label(fr, text="HEFESTOS", font=("Helvetica", 24, "bold"),
                  fg=GOLD, bg=BG).pack(pady=(6, 0))
@@ -773,11 +811,16 @@ class HefestosApp:
                 self._emit(tipo="estado", texto=f"{paso['desc']}…")
                 self._emit(tipo="paso_inicio", id=paso["id"])
                 try:
-                    ok = self._ejecutar_paso(paso)
+                    resultado = self._ejecutar_paso(paso)
                 except Exception as exc:
                     self._emit(tipo="log", texto=f"EXCEPCION: {exc}")
-                    ok = False
-                self._emit(tipo="paso_ok" if ok else "paso_error", id=paso["id"])
+                    resultado = False
+                if resultado == "skip":
+                    self._emit(tipo="paso_skip", id=paso["id"])
+                elif resultado:
+                    self._emit(tipo="paso_ok", id=paso["id"])
+                else:
+                    self._emit(tipo="paso_error", id=paso["id"])
 
         self._emit(tipo="fin")
 
@@ -797,7 +840,15 @@ class HefestosApp:
             return self._pip(["install", "--upgrade", "pip", "setuptools", "wheel"])
 
         if tipo == "pip":
-            return self._pip(["install"] + paso["paquetes"])
+            faltantes = self._paquetes_faltantes(paso["paquetes"])
+            if not faltantes:
+                self._emit(tipo="log",
+                            texto=f"Ya instalado: {', '.join(paso['paquetes'])}")
+                return "skip"
+            if len(faltantes) < len(paso["paquetes"]):
+                ya = set(paso["paquetes"]) - set(faltantes)
+                self._emit(tipo="log", texto=f"Ya instalado: {', '.join(ya)}")
+            return self._pip(["install"] + faltantes)
 
         if tipo == "whisper_model":
             return self._descargar_modelo_whisper(paso["modelo"], paso.get("mb", "?"))
@@ -824,9 +875,21 @@ class HefestosApp:
 
     # ── Implementaciones ─────────────────────────────────────────────────────
 
+    def _paquetes_faltantes(self, paquetes: list[str]) -> list[str]:
+        """Devuelve solo los paquetes que no están instalados (via pip show)."""
+        python = self._get_python()
+        faltantes = []
+        for pkg in paquetes:
+            nombre = pkg.split("==")[0].split(">=")[0].split("[")[0].strip()
+            r = subprocess.run([python, "-m", "pip", "show", nombre],
+                               capture_output=True, timeout=10)
+            if r.returncode != 0:
+                faltantes.append(pkg)
+        return faltantes
+
     def _pip(self, args: list[str]) -> bool:
         result = subprocess.run(
-            [sys.executable, "-m", "pip"] + args,
+            [self._get_python(), "-m", "pip"] + args,
             capture_output=True, text=True,
         )
         for linea in (result.stdout + result.stderr).strip().splitlines()[-6:]:
@@ -840,7 +903,7 @@ class HefestosApp:
                     texto=f"Descargando modelo Whisper {modelo} ({mb} MB)…")
         try:
             result = subprocess.run(
-                [sys.executable, "-c",
+                [self._get_python(), "-c",
                  f"import whisper; whisper.load_model('{modelo}'); print('OK')"],
                 capture_output=True, text=True, timeout=600,
             )
@@ -912,7 +975,7 @@ class HefestosApp:
             return False
         self._emit(tipo="log", texto=f"Ejecutando {script_rel}…")
         result = subprocess.run(
-            [sys.executable, str(script)],
+            [self._get_python(), str(script)],
             capture_output=True, text=True,
             cwd=str(self._eclipse_dir), timeout=120,
         )
@@ -926,7 +989,7 @@ class HefestosApp:
             if exe.exists():
                 self._emit(tipo="log", texto=f"Verificando sintaxis de {nombre}…")
                 result = subprocess.run(
-                    [sys.executable, "-m", "py_compile", str(exe)],
+                    [self._get_python(), "-m", "py_compile", str(exe)],
                     capture_output=True, text=True, timeout=20,
                 )
                 if result.returncode == 0:
@@ -943,11 +1006,15 @@ class HefestosApp:
     def _construir_final(self):
         fr = self._f_final
 
-        tk.Frame(fr, height=40, bg=BG).pack()
+        tk.Frame(fr, height=20, bg=BG).pack()
 
-        cv = tk.Canvas(fr, width=160, height=160, bg=BG, highlightthickness=0)
-        cv.pack()
-        dibujar_logo(cv, 80, 80, s=0.8)
+        self._logo_img_fin = _cargar_logo_tk(height=130)
+        if self._logo_img_fin:
+            tk.Label(fr, image=self._logo_img_fin, bg=BG).pack(pady=(10, 0))
+        else:
+            cv = tk.Canvas(fr, width=160, height=160, bg=BG, highlightthickness=0)
+            cv.pack()
+            dibujar_logo(cv, 80, 80, s=0.8)
 
         self._lbl_fin_titulo = tk.Label(
             fr, text="Instalacion completada",
@@ -972,8 +1039,26 @@ class HefestosApp:
             command=self._abrir_eclipse,
         ).pack(pady=(0, 10))
 
+        # Aviso Firefox / HELIOS
+        aviso = tk.Frame(fr, bg="#1E2A1E", padx=10, pady=6)
+        aviso.pack(fill="x", padx=40, pady=(4, 2))
+        tk.Label(aviso,
+                 text="⚠  HELIOS (historial laboratorio) requiere Mozilla Firefox",
+                 font=("Helvetica", 9, "bold"), fg="#FFD700", bg="#1E2A1E",
+                 ).pack(anchor="w")
+        tk.Label(aviso,
+                 text="Instale Firefox antes de usar HELIOS, ECLIPSE-T u otros\n"
+                      "programas del ecosistema OLYMPUS que accedan a IRIS.",
+                 font=("Helvetica", 8), fg=LIGHT, bg="#1E2A1E", justify="left",
+                 ).pack(anchor="w")
+        tk.Button(aviso, text="Descargar Firefox →",
+                  font=("Helvetica", 8), bg="#0060DF", fg="white",
+                  relief="flat", padx=8, pady=3,
+                  command=lambda: __import__("webbrowser").open(
+                      "https://www.mozilla.org/firefox/")).pack(anchor="w", pady=(4, 0))
+
         # Separador
-        tk.Frame(fr, height=1, bg=GRAY).pack(fill="x", padx=80, pady=(10, 10))
+        tk.Frame(fr, height=1, bg=GRAY).pack(fill="x", padx=80, pady=(10, 8))
 
         # Botón compilar EXE
         self._lbl_rebuild = tk.Label(
@@ -1014,7 +1099,7 @@ class HefestosApp:
             exe = self._eclipse_dir / nombre
             if exe.exists():
                 subprocess.Popen(
-                    [sys.executable, str(exe)],
+                    [self._get_python(), str(exe)],
                     cwd=str(self._eclipse_dir),
                 )
                 self.root.destroy()

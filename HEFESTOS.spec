@@ -1,11 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-
 a = Analysis(
     ['hefestos.py'],
     pathex=[],
     binaries=[],
-    datas=[('install_manifest.json', '.'), ('hefestos_key_validator.py', '.')],
+    datas=[
+        ('install_manifest.json', '.'),
+        ('hefestos_key_validator.py', '.'),
+        ('Resources/HEFESTOS.png', 'Resources'),
+        ('Resources/HEFESTOS.ico', 'Resources'),
+    ],
     hiddenimports=['hefestos_key_validator'],
     hookspath=[],
     hooksconfig={},
@@ -35,4 +39,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='Resources/HEFESTOS.ico',
 )

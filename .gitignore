@@ -1,0 +1,15 @@
+# Archivos PRIVADOS — nunca subir al repo OLYMPUS
+hefestos_key_validator.py
+prompt_claudecode_hefestos.txt
+guia_push_olympus.md
+
+# Artefactos de compilacion
+build/
+dist/
+__pycache__/
+*.pyc
+*.spec.bak
+
+# Archivos locales
+*.log
+.env
