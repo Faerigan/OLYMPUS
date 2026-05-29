@@ -1,10 +1,9 @@
 """
-hefestos.py — Instalador ECLIPSE-T v3.0
-HEFESTOS · Ecosistema OLYMPUS · CESFAM Cerrillos de Tamaya
-
-Compila como: pyinstaller --onefile --windowed --name HEFESTOS hefestos.py
+hefestos.py — Instalador ECLIPSE-T v3.0  ·  HEFESTOS v2.0
+Ecosistema OLYMPUS · CESFAM Cerrillos de Tamaya
 """
 
+import hashlib
 import json
 import math
 import platform
@@ -21,27 +20,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-# ── Logo PNG embebido ─────────────────────────────────────────────────────────
-
-def _cargar_logo_tk(height: int = 180) -> "tk.PhotoImage | None":
-    """Carga HEFESTOS.png desde Resources/. Devuelve None si no esta disponible."""
-    png = _BASE_DIR / "Resources" / "HEFESTOS.png"
-    if not png.exists():
-        return None
-    try:
-        from PIL import Image, ImageTk
-        img = Image.open(str(png))
-        ratio = height / img.height
-        img = img.resize((int(img.width * ratio), height), Image.LANCZOS)
-        return ImageTk.PhotoImage(img)
-    except Exception:
-        pass
-    try:
-        return tk.PhotoImage(file=str(png))
-    except Exception:
-        return None
-
-# ── Fernet (cifrado credenciales IRIS) ───────────────────────────────────────
+# ── Fernet (cifrado) ─────────────────────────────────────────────────────────
 try:
     from cryptography.fernet import Fernet
     _CRYPTO_OK = True
@@ -49,38 +28,44 @@ except ImportError:
     _CRYPTO_OK = False
 
 # ── Rutas ────────────────────────────────────────────────────────────────────
-
-# En EXE PyInstaller los datos quedan en sys._MEIPASS; en .py, junto al script
 _BASE_DIR = (Path(sys._MEIPASS) if getattr(sys, "frozen", False)
              else Path(__file__).parent)
 sys.path.insert(0, str(_BASE_DIR))
 
 OLYMPUS_RAW = "https://raw.githubusercontent.com/Faerigan/OLYMPUS/main"
 
-# ── Colores ──────────────────────────────────────────────────────────────────
+# ── Paleta crema / arquitectura griega ───────────────────────────────────────
+BG      = "#FAF6EE"   # fondo crema cálido
+BG2     = "#F0E8D8"   # crema ligeramente más oscuro
+DARK    = "#D4C8B0"   # separadores / bordes
+GOLD    = "#B8860B"   # dark goldenrod — legible sobre crema
+ACCENT  = "#C8921A"   # ámbar cálido para botones principales
+COLUMN  = "#D4C4A0"   # piedra cálida para pilares
+COL_SHD = "#B8A888"   # sombra / borde de pilar
+COL_GRV = "#C4B490"   # acanalado del pilar
+TEXT    = "#3A2E1E"   # marrón oscuro (texto principal)
+DIM     = "#8B7355"   # marrón medio (texto secundario)
+GREEN   = "#2E7D32"   # verde oscuro (éxito)
+RED     = "#C62828"   # rojo oscuro (error)
+GRAY    = "#9E8B6E"   # gris cálido
+ANIM_BG = "#2C2416"   # fondo del canvas de animación (oscuro)
+ANVIL   = "#607D8B"
+METAL   = "#90A4AE"
+MANGO   = "#5D4037"
 
-BG    = "#1A1A2E"
-DARK  = "#0F0F1E"
-GOLD  = "#F5A623"
-LIGHT = "#E8E8E8"
-GREEN = "#4CAF50"
-RED   = "#F44336"
-GRAY  = "#555577"
-ANVIL = "#607D8B"
-METAL = "#90A4AE"
-MANGO = "#5D4037"
-
-# ── Defaults para clave maestra ──────────────────────────────────────────────
-
+# ── Defaults clave maestra ───────────────────────────────────────────────────
 _DEFAULTS_MAESTRA = {
     "nombre_centro":      "CESFAM Cerrillos de Tamaya",
     "codigo_centro":      "",
     "comuna":             "Ovalle",
     "servicio_salud":     "Servicio de Salud Coquimbo",
+    "conector_lab":       "iris",
     "iris_url":           "http://207.248.201.73:8080/irisconsultorio/",
     "iris_usuario":       "",
     "iris_password":      "",
-    "iris_habilitado":    True,
+    "redclinica_url":     "",
+    "redclinica_usuario": "",
+    "redclinica_password":"",
     "nombre_profesional": "Dr. Nicolás Vargas",
     "profesion":          "Médico Familiar",
     "registro":           "",
@@ -89,10 +74,73 @@ _DEFAULTS_MAESTRA = {
 }
 
 
-# ── Canvas estático: logo HEFESTOS ───────────────────────────────────────────
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _generar_id(nombre: str) -> str:
+    return hashlib.sha256(nombre.encode()).hexdigest()[:8]
+
+
+def _cargar_logo_tk(path: "str | Path | None", size: int = 80) -> "tk.PhotoImage | None":
+    if not path:
+        return None
+    try:
+        from PIL import Image, ImageTk
+        img = Image.open(str(path))
+        img = img.resize((size, size), Image.LANCZOS)
+        return ImageTk.PhotoImage(img)
+    except Exception:
+        pass
+    try:
+        return tk.PhotoImage(file=str(path))
+    except Exception:
+        return None
+
+
+# ── Pilares dóricos ──────────────────────────────────────────────────────────
+
+def _dibujar_columnas(canvas: tk.Canvas, ancho: int = 44, alto: int = 760):
+    """Pilar dórico decorativo que ocupa todo el alto del canvas."""
+    canvas.delete("all")
+    cx = ancho // 2
+
+    # Estilobato — 3 escalones desde la base
+    for i, extra in enumerate([0, 6, 13]):
+        w  = 28 + extra
+        x1 = cx - w // 2
+        y1 = alto - 28 + i * 9
+        canvas.create_rectangle(x1, y1, x1 + w, y1 + 9,
+                                 fill=COLUMN, outline=COL_SHD, width=1)
+
+    # Fuste con acanalado
+    sx1, sx2 = cx - 12, cx + 12
+    sy1, sy2 = 68, alto - 28
+    canvas.create_rectangle(sx1, sy1, sx2, sy2,
+                             fill=COLUMN, outline=COL_SHD, width=1)
+    # 5 líneas de acanalado verticales
+    step = (sx2 - sx1) // 6
+    for i in range(1, 6):
+        fx = sx1 + i * step
+        canvas.create_line(fx, sy1 + 6, fx, sy2 - 6, fill=COL_GRV, width=1)
+
+    # Équino — trapecio que se abre hacia el ábaco
+    canvas.create_polygon(
+        sx1, sy1, sx2, sy1,
+        cx + 18, sy1 - 18, cx - 18, sy1 - 18,
+        fill=COLUMN, outline=COL_SHD, width=1
+    )
+
+    # Ábaco — losa plana superior
+    canvas.create_rectangle(0, sy1 - 32, ancho, sy1 - 18,
+                             fill=COLUMN, outline=COL_SHD, width=1)
+
+    # Línea dorada de entablamento
+    canvas.create_line(0, sy1 - 32, ancho, sy1 - 32, fill=GOLD, width=2)
+
+
+# ── Logo estático HEFESTOS (canvas) ─────────────────────────────────────────
 
 def dibujar_logo(canvas: tk.Canvas, cx: int, cy: int, s: float = 1.0):
-    """Yunque + martillo + rayos solares dorados (estático)."""
+    """Yunque + martillo + rayos solares dorados sobre fondo oscuro."""
     for ang in range(0, 360, 30):
         rad   = math.radians(ang)
         largo = int(28 * s) if abs(math.sin(rad)) > 0.5 else int(18 * s)
@@ -116,16 +164,16 @@ def dibujar_logo(canvas: tk.Canvas, cx: int, cy: int, s: float = 1.0):
     hw, hh = int(82 * s), int(12 * s)
     hx = cx - hw // 2
     canvas.create_rectangle(hx, cy - int(6*s), hx + hw, cy + int(6*s),
-                             fill=METAL, outline=LIGHT, width=1)
+                             fill=METAL, outline="#E8E8E8", width=1)
     canvas.create_rectangle(
         cx - int(5*s), cy - int(62*s), cx + int(5*s), cy - int(10*s),
-        fill=DARK, outline=GRAY,
+        fill=ANIM_BG, outline=GRAY,
     )
     mhw, mhh = int(36*s), int(18*s)
     mhx = cx - int(10*s)
     mhy = cy - int(62*s) - mhh
     canvas.create_rectangle(mhx, mhy, mhx + mhw, mhy + mhh,
-                             fill=METAL, outline=LIGHT, width=1)
+                             fill=METAL, outline="#E8E8E8", width=1)
 
 
 # ── HefestosAnimacion ────────────────────────────────────────────────────────
@@ -133,28 +181,24 @@ def dibujar_logo(canvas: tk.Canvas, cx: int, cy: int, s: float = 1.0):
 class HefestosAnimacion(tk.Canvas):
     """
     Animación de martillo golpeando yunque con chispas doradas.
-    Ciclo: 8 bajada (ease-in) + 4 impacto+chispas + 10 subida (ease-out) + 6 pausa.
-    24 fps → after(42, ...).
+    Canvas oscuro como "ventana de visualización" sobre el fondo crema.
     """
     _BAJADA  = 8
     _IMPACTO = 4
     _SUBIDA  = 10
     _PAUSA   = 6
-    _TOTAL   = 28   # sum of above
-
-    # Angulo del martillo: -40° (arriba) → +5° (impacto)
+    _TOTAL   = 28
     _ANG_ALTO = -40
     _ANG_BAJO =   5
 
     def __init__(self, parent, **kw):
         super().__init__(parent, width=160, height=160,
-                         bg=BG, highlightthickness=0, **kw)
+                         bg=ANIM_BG, highlightthickness=2,
+                         highlightbackground=GOLD, **kw)
         self._frame    = 0
         self._running  = False
         self._after_id = None
-        self._chispas: list[list] = []   # [x, y, ang_rad, lng, frames_left]
-
-    # ── Control ──────────────────────────────────────────────────────────────
+        self._chispas: list = []
 
     def iniciar(self):
         if self._running:
@@ -171,8 +215,6 @@ class HefestosAnimacion(tk.Canvas):
             self._after_id = None
         self.delete("all")
 
-    # ── Loop ─────────────────────────────────────────────────────────────────
-
     def _tick(self):
         if not self._running:
             return
@@ -181,90 +223,65 @@ class HefestosAnimacion(tk.Canvas):
         self._after_id = self.after(42, self._tick)
 
     def _angulo(self) -> float:
-        """Retorna ángulo del martillo en grados según frame actual."""
         f = self._frame
-        rango = self._ANG_BAJO - self._ANG_ALTO   # 45°
-
+        rango = self._ANG_BAJO - self._ANG_ALTO
         if f < self._BAJADA:
             t = f / self._BAJADA
-            return self._ANG_ALTO + (t * t) * rango          # ease-in
-
+            return self._ANG_ALTO + (t * t) * rango
         if f < self._BAJADA + self._IMPACTO:
-            return self._ANG_BAJO                             # impacto
-
+            return self._ANG_BAJO
         if f < self._BAJADA + self._IMPACTO + self._SUBIDA:
             fi = f - self._BAJADA - self._IMPACTO
             t  = fi / self._SUBIDA
-            return self._ANG_BAJO - (1 - (1-t)**2) * rango   # ease-out
-
-        return self._ANG_ALTO                                 # pausa
+            return self._ANG_BAJO - (1 - (1-t)**2) * rango
+        return self._ANG_ALTO
 
     def _renderizar(self):
         self.delete("all")
-        cx, cy_yuq = 80, 115   # centro X, tope del yunque Y
+        cx, cy_yuq = 80, 115
 
-        # ── Yunque ───────────────────────────────────────────────────────────
         self._yunque(cx, cy_yuq)
 
-        # ── Punto de impacto ─────────────────────────────────────────────────
         impact_x, impact_y = cx, cy_yuq - 10
 
-        # ── Generar chispas al primer frame de impacto ───────────────────────
         if self._frame == self._BAJADA:
-            n = random.randint(6, 8)
-            for _ in range(n):
-                ang = math.radians(random.uniform(20, 160))
-                lng = random.uniform(8, 18)
+            for _ in range(random.randint(6, 8)):
+                ang  = math.radians(random.uniform(20, 160))
+                lng  = random.uniform(8, 18)
                 life = random.randint(3, 4)
                 self._chispas.append([impact_x, impact_y, ang, lng, life])
 
-        # ── Dibujar chispas activas ──────────────────────────────────────────
         vivas = []
         for x, y, ang, lng, life in self._chispas:
             if life > 0:
                 x2 = x + math.cos(ang) * lng
-                y2 = y - math.sin(ang) * lng   # arriba en canvas
-                self.create_line(x, y, x2, y2, fill=GOLD,
-                                 width=2, capstyle="round")
+                y2 = y - math.sin(ang) * lng
+                self.create_line(x, y, x2, y2, fill=GOLD, width=2, capstyle="round")
                 vivas.append([x, y, ang, lng, life - 1])
         self._chispas = vivas
 
-        # ── Martillo ─────────────────────────────────────────────────────────
         self._martillo(cx, ang_deg=self._angulo(), impact_y=impact_y)
 
     def _yunque(self, cx: int, cy: int):
-        # Trapecio base
         self.create_polygon(
             cx-26, cy,   cx+26, cy,
             cx+32, cy+22, cx-32, cy+22,
             fill=ANVIL, outline=METAL, width=1,
         )
-        # Cuello
         self.create_rectangle(cx-12, cy-14, cx+12, cy, fill=ANVIL, outline=METAL)
-        # Cabeza plana (top)
         self.create_rectangle(cx-36, cy-24, cx+36, cy-14,
-                              fill=METAL, outline=LIGHT, width=1)
+                              fill=METAL, outline="#E8E8E8", width=1)
 
     def _martillo(self, cx: int, ang_deg: float, impact_y: int):
-        pivot_x = cx
-        pivot_y = 30       # punto de pivote (agarre)
-        mango   = 48       # largo del mango
-        ang     = math.radians(ang_deg)
-
-        # Extremo inferior del mango (donde va la cabeza)
+        pivot_x, pivot_y = cx, 30
+        mango = 48
+        ang   = math.radians(ang_deg)
         tip_x = pivot_x + math.sin(ang) * mango
         tip_y = pivot_y + math.cos(ang) * mango
-
-        # Mango
         self.create_line(pivot_x, pivot_y, tip_x, tip_y,
                          fill=MANGO, width=9, capstyle="round")
-
-        # Cabeza del martillo (perpendicular al mango en el extremo)
-        perp  = ang + math.pi / 2
-        half  = 16   # semiancho de la cabeza
-        depth = 12   # profundidad de la cabeza
-
-        # 4 vértices del rectángulo de la cabeza
+        perp = ang + math.pi / 2
+        half, depth = 16, 12
         vx = [
             tip_x + math.cos(perp) * half,
             tip_x - math.cos(perp) * half,
@@ -277,53 +294,92 @@ class HefestosAnimacion(tk.Canvas):
             tip_y - math.sin(perp) * half + math.cos(ang) * depth,
             tip_y + math.sin(perp) * half + math.cos(ang) * depth,
         ]
-        coords = sum(zip(vx, vy), ())
-        self.create_polygon(*coords, fill=METAL, outline=LIGHT, width=1)
+        self.create_polygon(*sum(zip(vx, vy), ()), fill=METAL, outline="#E8E8E8", width=1)
 
 
-# ── App principal ────────────────────────────────────────────────────────────
+# ── Aplicación principal ─────────────────────────────────────────────────────
 
 class HefestosApp:
 
     _ECLIPSE_CANDIDATOS = [
-        Path("D:/ECLIPSE"),
         Path("E:/ECLIPSE"),
+        Path("D:/ECLIPSE"),
         Path("C:/ECLIPSE"),
     ]
 
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("HEFESTOS — Instalador ECLIPSE-T v3.0")
+        self.root.title("HEFESTOS v2.0 — Instalador Ecosistema OLYMPUS")
         self.root.configure(bg=BG)
         self.root.resizable(False, False)
-        self.root.geometry("620x740")
+        self.root.geometry("700x760")
 
-        self._cola:         queue.Queue = queue.Queue()
-        self._eclipse_dir:  Path | None = None
-        self._labels_pasos: list[dict]  = []
-        self._es_maestra:   bool        = False
+        self._cola:                 queue.Queue = queue.Queue()
+        self._eclipse_dir:          Path | None = None
+        self._labels_pasos:         list        = []
+        self._es_maestra:           bool        = False
+        self._modo_agregar_centro:  bool        = False
+        self._cfg:                  dict        = {}
 
-        self._manifest = self._cargar_manifest()
-        self._total_pasos = sum(
-            len(g["pasos"]) for g in self._manifest["grupos"]
-        )
+        self._var_dir   = tk.StringVar()
+        self._var_clave = tk.StringVar()
+
+        self._manifest      = self._cargar_manifest()
+        self._total_pasos   = sum(len(g["pasos"]) for g in self._manifest["grupos"])
         self._pasos_completados = 0
-
-        self._var_dir        = tk.StringVar()
-        self._var_clave      = tk.StringVar()
-
-        # Config vars
-        self._cfg: dict[str, tk.Variable] = {}
 
         self._construir_ui()
         self._detectar_eclipse()
 
-    # ── Python del sistema (no el EXE) ───────────────────────────────────────
+    # ── Layout con pilares ───────────────────────────────────────────────────
+
+    def _construir_ui(self):
+        outer = tk.Frame(self.root, bg=BG)
+        outer.pack(fill="both", expand=True)
+
+        # Pilares laterales
+        self._cv_izq = tk.Canvas(outer, width=44, bg=BG, highlightthickness=0)
+        self._cv_izq.pack(side="left", fill="y")
+
+        self._cv_der = tk.Canvas(outer, width=44, bg=BG, highlightthickness=0)
+        self._cv_der.pack(side="right", fill="y")
+
+        # Área de contenido central
+        self._center = tk.Frame(outer, bg=BG)
+        self._center.pack(side="left", fill="both", expand=True)
+
+        # Dibujar pilares cuando la ventana esté lista
+        self.root.after(150, self._actualizar_pilares)
+
+        # Pantallas
+        self._f_inicio      = tk.Frame(self._center, bg=BG)
+        self._f_reconfig    = tk.Frame(self._center, bg=BG)
+        self._f_config      = tk.Frame(self._center, bg=BG)
+        self._f_instalacion = tk.Frame(self._center, bg=BG)
+        self._f_final       = tk.Frame(self._center, bg=BG)
+
+        self._construir_inicio()
+        self._construir_reconfig()
+        self._construir_config()
+        self._construir_instalacion()
+        self._construir_final()
+        self._mostrar(self._f_inicio)
+
+    def _actualizar_pilares(self):
+        h = self.root.winfo_height() or 760
+        _dibujar_columnas(self._cv_izq, 44, h)
+        _dibujar_columnas(self._cv_der, 44, h)
+
+    def _mostrar(self, frame: tk.Frame):
+        for f in (self._f_inicio, self._f_reconfig, self._f_config,
+                  self._f_instalacion, self._f_final):
+            f.pack_forget()
+        frame.pack(fill="both", expand=True)
+
+    # ── Python del sistema ───────────────────────────────────────────────────
 
     @staticmethod
     def _get_python() -> str:
-        """Devuelve el intérprete Python del sistema. En EXE evita usar sys.executable
-        (que apunta al propio HEFESTOS.exe y lanzaría nuevas instancias del instalador)."""
         if getattr(sys, "frozen", False):
             for nombre in ("python3", "python"):
                 p = shutil.which(nombre)
@@ -339,79 +395,60 @@ class HefestosApp:
         with open(path, encoding="utf-8") as f:
             return json.load(f)
 
-    # ── Construcción UI ──────────────────────────────────────────────────────
-
-    def _construir_ui(self):
-        self._f_inicio      = tk.Frame(self.root, bg=BG)
-        self._f_config      = tk.Frame(self.root, bg=BG)
-        self._f_instalacion = tk.Frame(self.root, bg=BG)
-        self._f_final       = tk.Frame(self.root, bg=BG)
-
-        self._construir_inicio()
-        self._construir_config()
-        self._construir_instalacion()
-        self._construir_final()
-        self._mostrar(self._f_inicio)
-
-    def _mostrar(self, frame: tk.Frame):
-        for f in (self._f_inicio, self._f_config,
-                  self._f_instalacion, self._f_final):
-            f.pack_forget()
-        frame.pack(fill="both", expand=True)
-
     # ── Pantalla 1: Inicio ───────────────────────────────────────────────────
 
     def _construir_inicio(self):
         fr = self._f_inicio
 
-        self._logo_img = _cargar_logo_tk(height=180)
-        if self._logo_img:
-            tk.Label(fr, image=self._logo_img, bg=BG).pack(pady=(24, 0))
-        else:
-            cv = tk.Canvas(fr, width=200, height=200, bg=BG, highlightthickness=0)
-            cv.pack(pady=(24, 0))
-            dibujar_logo(cv, 100, 100, s=1.0)
+        tk.Frame(fr, bg=BG, height=20).pack()
 
-        tk.Label(fr, text="HEFESTOS", font=("Helvetica", 24, "bold"),
-                 fg=GOLD, bg=BG).pack(pady=(6, 0))
-        tk.Label(fr, text="Instalador Ecosistema OLYMPUS  ·  v1.0",
-                 font=("Helvetica", 10), fg=LIGHT, bg=BG).pack()
+        # Logo en canvas oscuro enmarcado
+        cv_logo = tk.Canvas(fr, width=180, height=180, bg=ANIM_BG,
+                             highlightthickness=2, highlightbackground=GOLD)
+        cv_logo.pack(pady=(0, 4))
+        dibujar_logo(cv_logo, 90, 90, s=0.9)
+
+        tk.Label(fr, text="HEFESTOS", font=("Georgia", 24, "bold"),
+                 fg=GOLD, bg=BG).pack(pady=(8, 0))
+        tk.Label(fr, text="Instalador Ecosistema OLYMPUS  ·  v2.0",
+                 font=("Georgia", 10), fg=DIM, bg=BG).pack()
         tk.Label(fr, text="CESFAM Cerrillos de Tamaya",
-                 font=("Helvetica", 9), fg=GRAY, bg=BG).pack(pady=(2, 16))
+                 font=("Georgia", 9), fg=GRAY, bg=BG).pack(pady=(2, 10))
 
-        tk.Frame(fr, height=1, bg=GOLD).pack(fill="x", padx=44, pady=(0, 16))
+        tk.Frame(fr, height=2, bg=GOLD).pack(fill="x", padx=60, pady=(0, 14))
 
-        tk.Label(fr, text="Directorio ECLIPSE-T:", font=("Helvetica", 10, "bold"),
-                 fg=LIGHT, bg=BG).pack(anchor="w", padx=48)
+        # Directorio ECLIPSE
+        tk.Label(fr, text="Directorio ECLIPSE-T:", font=("Georgia", 10, "bold"),
+                 fg=TEXT, bg=BG).pack(anchor="w", padx=60)
         row_dir = tk.Frame(fr, bg=BG)
-        row_dir.pack(fill="x", padx=48, pady=(4, 12))
-        tk.Entry(row_dir, textvariable=self._var_dir, bg=DARK, fg=LIGHT,
+        row_dir.pack(fill="x", padx=60, pady=(4, 10))
+        tk.Entry(row_dir, textvariable=self._var_dir, bg=BG2, fg=TEXT,
                  insertbackground=GOLD, relief="flat",
-                 font=("Courier", 10), width=36).pack(side="left",
-                                                       ipady=5, padx=(0, 6))
-        tk.Button(row_dir, text="…", bg=GRAY, fg=LIGHT, relief="flat",
+                 font=("Courier", 10), width=34).pack(side="left", ipady=5, padx=(0, 6))
+        tk.Button(row_dir, text="…", bg=DARK, fg=TEXT, relief="flat",
                   command=self._seleccionar_dir).pack(side="left")
 
-        tk.Label(fr, text="Codigo de instalacion:", font=("Helvetica", 10, "bold"),
-                 fg=LIGHT, bg=BG).pack(anchor="w", padx=48)
+        # Código de instalación
+        tk.Label(fr, text="Código de instalación:", font=("Georgia", 10, "bold"),
+                 fg=TEXT, bg=BG).pack(anchor="w", padx=60)
         entry = tk.Entry(fr, textvariable=self._var_clave, show="•",
-                         bg=DARK, fg=LIGHT, insertbackground=GOLD,
-                         relief="flat", font=("Courier", 13), width=28)
+                         bg=BG2, fg=TEXT, insertbackground=GOLD,
+                         relief="flat", font=("Courier", 13), width=26)
         entry.pack(ipady=6, pady=(4, 4))
         entry.bind("<Return>", lambda _: self._comenzar())
 
-        self._lbl_msg = tk.Label(fr, text="", font=("Helvetica", 9),
-                                  fg=RED, bg=BG, wraplength=480, justify="center")
+        self._lbl_msg = tk.Label(fr, text="", font=("Georgia", 9),
+                                  fg=RED, bg=BG, wraplength=500, justify="center")
         self._lbl_msg.pack(pady=(2, 0))
 
         tk.Button(fr, text="  INSTALAR  ▶  ",
-                  font=("Helvetica", 13, "bold"),
-                  bg=GOLD, fg=DARK, relief="flat", padx=18, pady=9,
-                  activebackground="#D4891A",
-                  command=self._comenzar).pack(pady=(16, 6))
+                  font=("Georgia", 13, "bold"),
+                  bg=ACCENT, fg="white", relief="flat", padx=18, pady=9,
+                  activebackground="#A87018",
+                  command=self._comenzar).pack(pady=(14, 4))
 
-        tk.Label(fr, text="Tiempo estimado con buena conexion: ~20 min",
-                 font=("Helvetica", 8), fg=GRAY, bg=BG).pack()
+        tk.Label(fr, text="Tiempo estimado con buena conexión: ~20 min",
+                 font=("Georgia", 8), fg=GRAY, bg=BG).pack()
 
     def _detectar_eclipse(self):
         for p in self._ECLIPSE_CANDIDATOS:
@@ -420,11 +457,16 @@ class HefestosApp:
                 (p / "eclipse_t_v2.py").exists()
             ):
                 self._var_dir.set(str(p))
+                self._eclipse_dir = p
+                # Si ya hay centros configurados → modo reconfig
+                if (p / "resources" / "centros.dat").exists():
+                    self.root.after(200, lambda: self._mostrar(self._f_reconfig))
+                    self._poblar_reconfig()
                 return
 
     def _seleccionar_dir(self):
         d = filedialog.askdirectory(title="Seleccionar directorio ECLIPSE-T",
-                                     initialdir="D:/")
+                                     initialdir="E:/")
         if d:
             self._var_dir.set(d)
 
@@ -438,10 +480,10 @@ class HefestosApp:
 
         clave = self._var_clave.get().strip()
         if not clave:
-            self._lbl_msg.config(text="Ingrese un codigo de instalacion.", fg=RED)
+            self._lbl_msg.config(text="Ingrese un código de instalación.", fg=RED)
             return
 
-        self._lbl_msg.config(text="Verificando codigo…", fg=GOLD)
+        self._lbl_msg.config(text="Verificando código…", fg=GOLD)
         self.root.update()
 
         valida, estado = self._validar_clave(clave)
@@ -450,15 +492,15 @@ class HefestosApp:
                 from hefestos_key_validator import MENSAJES  # type: ignore
                 self._lbl_msg.config(text=MENSAJES.get(estado, estado), fg=RED)
             except ImportError:
-                self._lbl_msg.config(text=f"Clave invalida ({estado})", fg=RED)
+                self._lbl_msg.config(text=f"Clave inválida ({estado})", fg=RED)
             return
 
         if estado == "sin_red":
             if not messagebox.askyesno(
-                "Sin conexion a internet",
-                "No se pudo verificar el codigo (sin internet).\n"
-                "La instalacion continuara, pero el codigo quedara\n"
-                "pendiente de verificacion posterior.\n\n"
+                "Sin conexión a internet",
+                "No se pudo verificar el código (sin internet).\n"
+                "La instalación continuará, pero el código quedará\n"
+                "pendiente de verificación posterior.\n\n"
                 "¿Continuar de todas formas?",
             ):
                 self._lbl_msg.config(text="", fg=RED)
@@ -467,19 +509,125 @@ class HefestosApp:
         self._es_maestra = (estado == "maestra")
         self._lbl_msg.config(text="")
 
-        # Pasar a config antes de instalar
         if self._es_maestra:
             self._aplicar_defaults_maestra()
         self._mostrar(self._f_config)
 
-    def _validar_clave(self, clave: str) -> tuple[bool, str]:
+    def _validar_clave(self, clave: str) -> tuple:
         try:
             from hefestos_key_validator import validar_clave_instalacion  # type: ignore
             return validar_clave_instalacion(clave, equipo_id=platform.node())
         except ImportError:
             return True, "sin_red"
 
-    # ── Pantalla 2: Configuración del centro ─────────────────────────────────
+    # ── Pantalla 2: Reconfig (gestión multi-centro) ──────────────────────────
+
+    def _construir_reconfig(self):
+        fr = self._f_reconfig
+
+        tk.Label(fr, text="HEFESTOS — Gestionar Centros",
+                 font=("Georgia", 15, "bold"), fg=GOLD, bg=BG).pack(pady=(20, 2))
+        tk.Label(fr,
+                 text="Seleccione un centro para activarlo o agregue uno nuevo",
+                 font=("Georgia", 9), fg=DIM, bg=BG).pack()
+        tk.Frame(fr, height=2, bg=GOLD).pack(fill="x", padx=40, pady=(10, 6))
+
+        # Área de centros (se puebla dinámicamente)
+        self._frm_centros = tk.Frame(fr, bg=BG)
+        self._frm_centros.pack(fill="both", expand=True, padx=30, pady=6)
+
+        # Botones inferiores
+        btns = tk.Frame(fr, bg=BG)
+        btns.pack(pady=(6, 16))
+
+        tk.Button(btns, text="+ Agregar nuevo centro",
+                  font=("Georgia", 10, "bold"),
+                  bg=ACCENT, fg="white", relief="flat", padx=14, pady=7,
+                  activebackground="#A87018",
+                  command=self._cmd_agregar_nuevo_centro).pack(side="left", padx=(0, 10))
+
+        tk.Button(btns, text="Cerrar",
+                  font=("Georgia", 10), bg=DARK, fg=TEXT,
+                  relief="flat", padx=14, pady=6,
+                  command=self.root.destroy).pack(side="left")
+
+    def _poblar_reconfig(self):
+        """Rellena la pantalla reconfig con los centros existentes."""
+        datos = self._cargar_centros_existentes()
+        if not datos:
+            return
+
+        for w in self._frm_centros.winfo_children():
+            w.destroy()
+
+        centros  = datos.get("centros", [])
+        activo   = datos.get("activo", 0)
+
+        for idx, centro in enumerate(centros):
+            nombre = centro.get("nombre_centro", "Centro sin nombre")
+            logo_rel = centro.get("logo_principal", "")
+            logo_path = None
+            if self._eclipse_dir and logo_rel:
+                p = self._eclipse_dir / "resources" / logo_rel
+                if p.exists():
+                    logo_path = p
+
+            es_activo = (idx == activo)
+            bg_fila = "#E8F5E9" if es_activo else BG2
+
+            fila = tk.Frame(self._frm_centros, bg=bg_fila, relief="groove", bd=1,
+                             cursor="hand2")
+            fila.pack(fill="x", pady=4, padx=4)
+            fila.bind("<Button-1>", lambda e, i=idx: self._activar_centro(i))
+
+            # Logo
+            img = _cargar_logo_tk(logo_path, 60)
+            if img:
+                lbl_img = tk.Label(fila, image=img, bg=bg_fila, cursor="hand2")
+                lbl_img.image = img  # retener referencia
+                lbl_img.pack(side="left", padx=10, pady=8)
+                lbl_img.bind("<Button-1>", lambda e, i=idx: self._activar_centro(i))
+            else:
+                tk.Label(fila, text="🏥", font=("Georgia", 28),
+                         bg=bg_fila, cursor="hand2").pack(side="left", padx=10, pady=8)
+
+            info = tk.Frame(fila, bg=bg_fila)
+            info.pack(side="left", fill="both", expand=True, pady=8)
+            info.bind("<Button-1>", lambda e, i=idx: self._activar_centro(i))
+
+            tk.Label(info, text=nombre, font=("Georgia", 11, "bold"),
+                     fg=TEXT, bg=bg_fila, anchor="w",
+                     cursor="hand2").pack(anchor="w")
+            tk.Label(info,
+                     text=centro.get("comuna", "") + "  ·  " + centro.get("servicio_salud", ""),
+                     font=("Georgia", 9), fg=DIM, bg=bg_fila, anchor="w").pack(anchor="w")
+
+            if es_activo:
+                tk.Label(fila, text="● ACTIVO", font=("Georgia", 9, "bold"),
+                         fg=GREEN, bg=bg_fila).pack(side="right", padx=14)
+
+    def _activar_centro(self, idx: int):
+        datos = self._cargar_centros_existentes()
+        if not datos:
+            return
+        datos["activo"] = idx
+        self._guardar_centros_dat(datos)
+        self._regenerar_config_centro(datos)
+        self._poblar_reconfig()
+        messagebox.showinfo(
+            "Centro activado",
+            f"Centro «{datos['centros'][idx].get('nombre_centro', '')}» activado.\n"
+            "Reinicie ECLIPSE-T y HELIOS para aplicar el cambio.",
+            parent=self.root
+        )
+
+    def _cmd_agregar_nuevo_centro(self):
+        self._modo_agregar_centro = True
+        self._var_clave.set("")
+        self._lbl_msg.config(text="")
+        self._mostrar(self._f_inicio)
+
+    # ── Pantalla 3: Configuración del centro ─────────────────────────────────
 
     def _mk_var(self, key: str, default="") -> tk.StringVar:
         v = tk.StringVar(value=str(default))
@@ -489,154 +637,151 @@ class HefestosApp:
     def _construir_config(self):
         fr = self._f_config
 
-        # Header
         tk.Label(fr, text="Configurar Centro de Salud",
-                 font=("Helvetica", 15, "bold"), fg=GOLD, bg=BG).pack(pady=(20, 2))
+                 font=("Georgia", 15, "bold"), fg=GOLD, bg=BG).pack(pady=(18, 2))
         tk.Label(fr,
-                 text="Esta informacion se usara en todos los documentos generados por ECLIPSE-T",
-                 font=("Helvetica", 9), fg=LIGHT, bg=BG).pack()
-        tk.Frame(fr, height=1, bg=GOLD).pack(fill="x", padx=30, pady=(10, 6))
+                 text="Esta información se usará en todos los documentos generados por ECLIPSE-T",
+                 font=("Georgia", 9), fg=DIM, bg=BG).pack()
+        tk.Frame(fr, height=2, bg=GOLD).pack(fill="x", padx=40, pady=(10, 6))
 
-        # Scrollable body
-        canvas_wrap = tk.Canvas(fr, bg=BG, highlightthickness=0)
-        sb = ttk.Scrollbar(fr, orient="vertical", command=canvas_wrap.yview)
-        canvas_wrap.configure(yscrollcommand=sb.set)
+        # Cuerpo scrollable
+        cv_wrap = tk.Canvas(fr, bg=BG, highlightthickness=0)
+        sb = ttk.Scrollbar(fr, orient="vertical", command=cv_wrap.yview)
+        cv_wrap.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
-        canvas_wrap.pack(fill="both", expand=True, padx=(12, 0))
+        cv_wrap.pack(fill="both", expand=True, padx=(12, 0))
 
-        body = tk.Frame(canvas_wrap, bg=BG)
-        body_id = canvas_wrap.create_window((0, 0), window=body, anchor="nw")
+        body = tk.Frame(cv_wrap, bg=BG)
+        body_id = cv_wrap.create_window((0, 0), window=body, anchor="nw")
 
         def _on_resize(e):
-            canvas_wrap.itemconfig(body_id, width=e.width)
-        canvas_wrap.bind("<Configure>", _on_resize)
+            cv_wrap.itemconfig(body_id, width=e.width)
+        cv_wrap.bind("<Configure>", _on_resize)
         body.bind("<Configure>",
-                  lambda e: canvas_wrap.configure(
-                      scrollregion=canvas_wrap.bbox("all")))
+                  lambda e: cv_wrap.configure(scrollregion=cv_wrap.bbox("all")))
 
-        pad = dict(padx=12, pady=3, sticky="w")
+        lf_kw = dict(fg=GOLD, bg=BG, font=("Georgia", 9, "bold"))
 
-        # ── Identidad ────────────────────────────────────────────────────────
-        lf1 = tk.LabelFrame(body, text="  Identidad del Centro  ",
-                             fg=GOLD, bg=BG, font=("Helvetica", 9, "bold"))
+        # Identidad
+        lf1 = tk.LabelFrame(body, text="  Identidad del Centro  ", **lf_kw)
         lf1.pack(fill="x", padx=8, pady=(4, 6))
-
         self._campo(lf1, "Nombre del centro:", "nombre_centro",
-                    "CESFAM Cerrillos de Tamaya", width=38, row=0)
-        self._campo(lf1, "Codigo DEIS:", "codigo_centro", "", width=14, row=1, col=0)
+                    "CESFAM Cerrillos de Tamaya", width=36, row=0)
+        self._campo(lf1, "Código DEIS:", "codigo_centro", "", width=14, row=1, col=0)
         self._campo(lf1, "Comuna:", "comuna", "", width=18, row=1, col=2)
         self._campo(lf1, "Servicio de Salud:", "servicio_salud",
-                    "Servicio de Salud Coquimbo", width=30, row=2)
+                    "Servicio de Salud Coquimbo", width=28, row=2)
 
-        # ── IRIS ─────────────────────────────────────────────────────────────
-        lf2 = tk.LabelFrame(body, text="  Acceso Laboratorio (HELIOS/IRIS)  ",
-                             fg=GOLD, bg=BG, font=("Helvetica", 9, "bold"))
+        # Laboratorio
+        lf2 = tk.LabelFrame(body, text="  Laboratorio (HELIOS)  ", **lf_kw)
         lf2.pack(fill="x", padx=8, pady=4)
 
+        tk.Label(lf2, text="Tipo:", bg=BG, fg=TEXT, font=("Georgia", 9)).grid(
+            row=0, column=0, padx=(8, 2), pady=3, sticky="w")
+        self._cfg["conector_lab"] = tk.StringVar(value="iris")
+        for i, (val, txt) in enumerate([("iris", "IRIS (red local)"),
+                                         ("redclinica", "Red Clínica (internet)"),
+                                         ("ninguno", "Sin laboratorio")]):
+            tk.Radiobutton(lf2, text=txt, variable=self._cfg["conector_lab"],
+                           value=val, bg=BG, fg=TEXT, selectcolor=BG2,
+                           activebackground=BG,
+                           font=("Georgia", 9)).grid(row=0, column=i+1,
+                                                      padx=4, pady=3, sticky="w")
+
         self._campo(lf2, "URL IRIS:", "iris_url",
-                    "http://207.248.201.73:8080/irisconsultorio/", width=46, row=0)
-
-        self._cfg["iris_habilitado"] = tk.BooleanVar(value=True)
-        tk.Checkbutton(lf2, text="IRIS habilitado",
-                       variable=self._cfg["iris_habilitado"],
-                       bg=BG, fg=LIGHT, selectcolor=DARK,
-                       activebackground=BG).grid(row=0, column=2,
-                                                  padx=6, pady=2, sticky="w")
-
-        self._campo(lf2, "Usuario:", "iris_usuario", "", width=20, row=1, col=0)
-        self._campo_pass(lf2, "Contrasena:", "iris_password", row=1, col=2)
+                    "http://207.248.201.73:8080/irisconsultorio/", width=40, row=1)
+        self._campo(lf2, "Usuario IRIS:", "iris_usuario", "", width=18, row=2, col=0)
+        self._campo_pass(lf2, "Contraseña:", "iris_password", row=2, col=2)
+        self._campo(lf2, "URL RedClínica:", "redclinica_url",
+                    "https://examenes.redclinica.cl", width=40, row=3)
+        self._campo(lf2, "Usuario RedClínica:", "redclinica_usuario", "", width=18, row=4, col=0)
+        self._campo_pass(lf2, "Contraseña:", "redclinica_password", row=4, col=2)
 
         if not _CRYPTO_OK:
             tk.Label(lf2,
                      text="⚠ cryptography no instalado — credenciales sin cifrar",
-                     fg="#FFD700", bg=BG, font=("Helvetica", 8)).grid(
-                         row=2, column=0, columnspan=4, **pad)
+                     fg=RED, bg=BG, font=("Georgia", 8)).grid(
+                         row=5, column=0, columnspan=4, padx=8, pady=2, sticky="w")
 
-        # ── Profesional ──────────────────────────────────────────────────────
-        lf3 = tk.LabelFrame(body, text="  Profesional Responsable  ",
-                             fg=GOLD, bg=BG, font=("Helvetica", 9, "bold"))
+        # Profesional
+        lf3 = tk.LabelFrame(body, text="  Profesional Responsable  ", **lf_kw)
         lf3.pack(fill="x", padx=8, pady=4)
-
         self._campo(lf3, "Nombre:", "nombre_profesional",
-                    "Dr. Nicolas Vargas", width=30, row=0)
-        self._campo(lf3, "Profesion:", "profesion",
-                    "Medico Familiar", width=20, row=1, col=0)
+                    "Dr. Nicolás Vargas", width=28, row=0)
+        self._campo(lf3, "Profesión:", "profesion",
+                    "Médico Familiar", width=20, row=1, col=0)
         self._campo(lf3, "Registro:", "registro", "", width=14, row=1, col=2)
 
-        # ── Logos ────────────────────────────────────────────────────────────
-        lf4 = tk.LabelFrame(body, text="  Logos (opcional)  ",
-                             fg=GOLD, bg=BG, font=("Helvetica", 9, "bold"))
+        # Logos
+        lf4 = tk.LabelFrame(body, text="  Logos (máx. 2, opcional)  ", **lf_kw)
         lf4.pack(fill="x", padx=8, pady=4)
-
+        tk.Label(lf4, text="Si no elige ninguno se usará el logo del Dr. Vargas.",
+                 font=("Georgia", 8), fg=DIM, bg=BG).grid(
+                     row=0, column=0, columnspan=4, padx=8, pady=(4, 2), sticky="w")
         self._cfg["logo_principal"]  = tk.StringVar()
         self._cfg["logo_secundario"] = tk.StringVar()
+        self._fila_logo(lf4, "Logo principal:",   "logo_principal",  row=1)
+        self._fila_logo(lf4, "Logo secundario:",  "logo_secundario", row=2)
 
-        self._fila_logo(lf4, "Logo principal:",   "logo_principal",  row=0)
-        self._fila_logo(lf4, "Logo secundario:", "logo_secundario", row=1)
-
-        # ── Botones ──────────────────────────────────────────────────────────
+        # Botones
         btns = tk.Frame(fr, bg=BG)
-        btns.pack(pady=(8, 16))
+        btns.pack(pady=(8, 14))
         tk.Button(btns, text="Omitir por ahora",
-                  font=("Helvetica", 10), bg=GRAY, fg=LIGHT,
+                  font=("Georgia", 10), bg=DARK, fg=TEXT,
                   relief="flat", padx=14, pady=6,
-                  command=self._omitir_config).pack(side="left", padx=(0, 12))
+                  command=self._omitir_config).pack(side="left", padx=(0, 10))
         tk.Button(btns, text="Guardar y continuar  ▶",
-                  font=("Helvetica", 11, "bold"),
-                  bg=GOLD, fg=DARK, relief="flat", padx=16, pady=7,
-                  activebackground="#D4891A",
+                  font=("Georgia", 11, "bold"),
+                  bg=ACCENT, fg="white", relief="flat", padx=16, pady=7,
+                  activebackground="#A87018",
                   command=self._guardar_config).pack(side="left")
 
     def _campo(self, parent, label: str, key: str, default: str,
                width: int = 24, row: int = 0, col: int = 0):
-        tk.Label(parent, text=label, bg=BG, fg=LIGHT,
-                 font=("Helvetica", 9)).grid(row=row, column=col,
-                                              padx=(8, 2), pady=3, sticky="w")
+        tk.Label(parent, text=label, bg=BG, fg=TEXT,
+                 font=("Georgia", 9)).grid(row=row, column=col,
+                                            padx=(8, 2), pady=3, sticky="w")
         v = self._mk_var(key, default)
-        tk.Entry(parent, textvariable=v, bg=DARK, fg=LIGHT,
+        tk.Entry(parent, textvariable=v, bg=BG2, fg=TEXT,
                  insertbackground=GOLD, relief="flat",
                  font=("Courier", 9), width=width).grid(
                      row=row, column=col+1, padx=(0, 8), pady=3, sticky="w")
 
     def _campo_pass(self, parent, label: str, key: str,
                     row: int = 0, col: int = 0):
-        tk.Label(parent, text=label, bg=BG, fg=LIGHT,
-                 font=("Helvetica", 9)).grid(row=row, column=col,
-                                              padx=(8, 2), pady=3, sticky="w")
+        tk.Label(parent, text=label, bg=BG, fg=TEXT,
+                 font=("Georgia", 9)).grid(row=row, column=col,
+                                            padx=(8, 2), pady=3, sticky="w")
         v = self._mk_var(key, "")
-        tk.Entry(parent, textvariable=v, show="•", bg=DARK, fg=LIGHT,
+        tk.Entry(parent, textvariable=v, show="•", bg=BG2, fg=TEXT,
                  insertbackground=GOLD, relief="flat",
-                 font=("Courier", 9), width=20).grid(
+                 font=("Courier", 9), width=18).grid(
                      row=row, column=col+1, padx=(0, 8), pady=3, sticky="w")
 
     def _fila_logo(self, parent, label: str, key: str, row: int):
-        tk.Label(parent, text=label, bg=BG, fg=LIGHT,
-                 font=("Helvetica", 9)).grid(row=row, column=0,
-                                              padx=(8, 2), pady=3, sticky="w")
-        entry = tk.Entry(parent, textvariable=self._cfg[key], bg=DARK, fg=LIGHT,
+        tk.Label(parent, text=label, bg=BG, fg=TEXT,
+                 font=("Georgia", 9)).grid(row=row, column=0,
+                                            padx=(8, 2), pady=3, sticky="w")
+        entry = tk.Entry(parent, textvariable=self._cfg[key], bg=BG2, fg=TEXT,
                          insertbackground=GOLD, relief="flat",
-                         font=("Courier", 8), width=34)
+                         font=("Courier", 8), width=30)
         entry.grid(row=row, column=1, padx=(0, 4), pady=3, sticky="w")
-        tk.Button(parent, text="…", bg=GRAY, fg=LIGHT, relief="flat",
+        tk.Button(parent, text="…", bg=DARK, fg=TEXT, relief="flat",
                   command=lambda k=key: self._seleccionar_logo(k)).grid(
                       row=row, column=2, padx=(0, 8), pady=3)
 
     def _seleccionar_logo(self, key: str):
         path = filedialog.askopenfilename(
             title="Seleccionar imagen",
-            filetypes=[("Imagenes", "*.png *.jpg *.jpeg *.bmp"), ("Todos", "*.*")]
+            filetypes=[("Imágenes", "*.png *.jpg *.jpeg *.bmp"), ("Todos", "*.*")]
         )
         if path:
             self._cfg[key].set(path)
 
     def _aplicar_defaults_maestra(self):
-        """Pre-rellena la config con los valores del CESFAM al usar clave maestra."""
         for key, val in _DEFAULTS_MAESTRA.items():
             if key in self._cfg:
-                if isinstance(self._cfg[key], tk.BooleanVar):
-                    self._cfg[key].set(bool(val))
-                else:
-                    self._cfg[key].set(str(val))
+                self._cfg[key].set(str(val))
 
     def _omitir_config(self):
         self._iniciar_instalacion()
@@ -645,96 +790,168 @@ class HefestosApp:
         if not self._eclipse_dir:
             return
 
-        config = {k: (v.get() if not isinstance(v, tk.BooleanVar) else v.get())
-                  for k, v in self._cfg.items()}
+        nuevo = {k: v.get() for k, v in self._cfg.items()}
+        nuevo["id"] = _generar_id(nuevo.get("nombre_centro", "centro"))
 
-        # Generar/cargar clave Fernet y cifrar credenciales IRIS
-        key_path = self._eclipse_dir / "data" / ".key"
-        if _CRYPTO_OK:
-            key_path.parent.mkdir(parents=True, exist_ok=True)
-            if key_path.exists():
-                fkey = key_path.read_bytes()
-            else:
-                fkey = Fernet.generate_key()
-                key_path.write_bytes(fkey)
-            f = Fernet(fkey)
-            for campo in ("iris_usuario", "iris_password"):
-                raw = config.get(campo, "")
-                if raw:
-                    config[campo] = f.encrypt(raw.encode()).decode()
-                    config[f"_{campo}_cifrado"] = True
-
-        # Copiar logos
         recursos = self._eclipse_dir / "resources"
         recursos.mkdir(exist_ok=True)
+
+        # Copiar logos; si no hay logo principal → usar logo_dr_vargas.png
         for campo, dest_name in (("logo_principal",  "logo_centro.png"),
                                   ("logo_secundario", "logo_ss.png")):
-            src = config.get(campo, "")
+            src = nuevo.get(campo, "").strip()
             if src and Path(src).exists():
                 shutil.copy2(src, recursos / dest_name)
-                config[campo] = str(recursos / dest_name)
+                nuevo[campo] = dest_name
+            elif not src and campo == "logo_principal":
+                default = recursos / "logo_dr_vargas.png"
+                if default.exists():
+                    shutil.copy2(default, recursos / dest_name)
+                    nuevo[campo] = dest_name
 
-        dest = self._eclipse_dir / "config_centro.json"
-        with open(dest, "w", encoding="utf-8") as f_out:
-            json.dump(config, f_out, ensure_ascii=False, indent=2)
+        # Cifrar credenciales individualmente
+        fkey = self._obtener_o_crear_key(recursos)
+        if _CRYPTO_OK and fkey:
+            f = Fernet(fkey)
+            for campo in ("iris_usuario", "iris_password",
+                           "redclinica_usuario", "redclinica_password"):
+                raw = nuevo.get(campo, "").strip()
+                if raw:
+                    nuevo[campo]                    = f.encrypt(raw.encode()).decode()
+                    nuevo[f"_{campo}_cifrado"]      = True
 
+        # Cargar o crear estructura multi-centro
+        datos = self._cargar_centros_existentes() or {
+            "version": 1, "activo": 0, "centros": []
+        }
+
+        if self._modo_agregar_centro:
+            datos["centros"].append(nuevo)
+            datos["activo"] = len(datos["centros"]) - 1
+        else:
+            datos["centros"] = [nuevo]
+            datos["activo"]  = 0
+
+        # Cifrar JSON completo → centros.dat
+        self._guardar_centros_dat(datos)
+
+        # Mantener config_centro.json compatible con ECLIPSE/HELIOS
+        self._regenerar_config_centro(datos)
+
+        self._modo_agregar_centro = False
         self._iniciar_instalacion()
 
-    # ── Pantalla 3: Instalación ──────────────────────────────────────────────
+    def _obtener_o_crear_key(self, recursos: Path) -> bytes | None:
+        if not _CRYPTO_OK:
+            return None
+        key_path = recursos / ".key"
+        if key_path.exists():
+            return key_path.read_bytes()
+        fkey = Fernet.generate_key()
+        key_path.write_bytes(fkey)
+        return fkey
+
+    def _guardar_centros_dat(self, datos: dict):
+        if not self._eclipse_dir:
+            return
+        recursos = self._eclipse_dir / "resources"
+        recursos.mkdir(exist_ok=True)
+        json_bytes = json.dumps(datos, ensure_ascii=False, indent=2).encode("utf-8")
+        dat_path = recursos / "centros.dat"
+        if _CRYPTO_OK:
+            fkey = self._obtener_o_crear_key(recursos)
+            if fkey:
+                dat_path.write_bytes(Fernet(fkey).encrypt(json_bytes))
+                return
+        dat_path.write_bytes(json_bytes)  # fallback sin cifrado
+
+    def _cargar_centros_existentes(self) -> dict | None:
+        if not self._eclipse_dir:
+            return None
+        dat_path = self._eclipse_dir / "resources" / "centros.dat"
+        if not dat_path.exists():
+            return None
+        try:
+            data = dat_path.read_bytes()
+            if _CRYPTO_OK:
+                key_path = self._eclipse_dir / "resources" / ".key"
+                if key_path.exists():
+                    data = Fernet(key_path.read_bytes()).decrypt(data)
+            return json.loads(data.decode("utf-8"))
+        except Exception:
+            return None
+
+    def _regenerar_config_centro(self, datos: dict):
+        """Escribe config_centro.json con el centro activo (para ECLIPSE/HELIOS)."""
+        if not self._eclipse_dir:
+            return
+        try:
+            idx    = datos.get("activo", 0)
+            centro = datos["centros"][idx].copy()
+            centro["conector_lab"] = centro.get("conector_lab", "iris")
+            dest   = self._eclipse_dir / "config_centro.json"
+            with open(dest, "w", encoding="utf-8") as fh:
+                json.dump(centro, fh, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    # ── Pantalla 4: Instalación ──────────────────────────────────────────────
 
     def _construir_instalacion(self):
         fr = self._f_instalacion
 
-        # Header compacto
         hdr = tk.Frame(fr, bg=DARK)
         hdr.pack(fill="x")
-        tk.Label(hdr, text="HEFESTOS — Instalacion en curso",
-                 font=("Helvetica", 12, "bold"), fg=GOLD, bg=DARK).pack(
+        tk.Label(hdr, text="HEFESTOS — Instalación en curso",
+                 font=("Georgia", 12, "bold"), fg=GOLD, bg=DARK).pack(
                      side="left", padx=16, pady=10)
 
-        # Animación centrada
-        anim_frame = tk.Frame(fr, bg=BG)
-        anim_frame.pack(pady=(8, 4))
+        # Canvas de animación enmarcado (oscuro sobre fondo crema)
+        anim_frame = tk.Frame(fr, bg=BG, pady=6)
+        anim_frame.pack()
         self._animacion = HefestosAnimacion(anim_frame)
         self._animacion.pack()
 
         # Lista de pasos
         pasos_frame = tk.Frame(fr, bg=BG)
-        pasos_frame.pack(fill="x", padx=18, pady=(4, 4))
+        pasos_frame.pack(fill="x", padx=14, pady=(4, 4))
 
         for grupo in self._manifest["grupos"]:
             tk.Label(pasos_frame, text=f"  {grupo['nombre']}",
-                     font=("Helvetica", 9, "bold"), fg=GOLD, bg=BG,
+                     font=("Georgia", 9, "bold"), fg=GOLD, bg=BG,
                      anchor="w").pack(fill="x", pady=(4, 1))
             for paso in grupo["pasos"]:
                 fila = tk.Frame(pasos_frame, bg=BG)
                 fila.pack(fill="x", padx=14, pady=1)
-                ico = tk.Label(fila, text="○", font=("Helvetica", 10),
+                ico = tk.Label(fila, text="○", font=("Georgia", 10),
                                fg=GRAY, bg=BG, width=2)
                 ico.pack(side="left")
                 lbl = tk.Label(fila, text=paso["desc"],
-                               font=("Helvetica", 9), fg=LIGHT, bg=BG, anchor="w")
+                               font=("Georgia", 9), fg=TEXT, bg=BG, anchor="w")
                 lbl.pack(side="left", fill="x")
                 self._labels_pasos.append({"id": paso["id"], "ico": ico, "lbl": lbl})
 
         # Barra de progreso
         pk = tk.Frame(fr, bg=BG)
-        pk.pack(fill="x", padx=18, pady=(6, 2))
-        self._progress = ttk.Progressbar(pk, mode="determinate",
-                                          length=580, maximum=100)
+        pk.pack(fill="x", padx=14, pady=(6, 2))
+        style = ttk.Style()
+        style.configure("Gold.Horizontal.TProgressbar",
+                         troughcolor=BG2, background=ACCENT)
+        self._progress = ttk.Progressbar(pk, style="Gold.Horizontal.TProgressbar",
+                                          mode="determinate", length=560, maximum=100)
         self._progress.pack(fill="x")
 
         self._lbl_estado = tk.Label(fr, text="Preparando…",
-                                     font=("Helvetica", 9, "italic"),
+                                     font=("Georgia", 9, "italic"),
                                      fg=GOLD, bg=BG)
-        self._lbl_estado.pack(anchor="w", padx=20)
+        self._lbl_estado.pack(anchor="w", padx=16)
 
         # Log
-        log_wrap = tk.Frame(fr, bg=DARK)
-        log_wrap.pack(fill="both", expand=True, padx=18, pady=(6, 12))
-        self._log = tk.Text(log_wrap, bg=DARK, fg="#AAFFAA",
+        log_wrap = tk.Frame(fr, bg=BG2, relief="sunken", bd=1)
+        log_wrap.pack(fill="both", expand=True, padx=14, pady=(4, 8))
+        self._log = tk.Text(log_wrap, bg=BG2, fg=TEXT,
                              font=("Courier", 8), relief="flat",
-                             state="disabled", wrap="word", height=7)
+                             state="disabled", wrap="word", height=6)
         sb2 = ttk.Scrollbar(log_wrap, command=self._log.yview)
         self._log.configure(yscrollcommand=sb2.set)
         sb2.pack(side="right", fill="y")
@@ -760,16 +977,12 @@ class HefestosApp:
             while True:
                 msg = self._cola.get_nowait()
                 t   = msg["tipo"]
-
                 if t == "log":
                     self._log_append(msg["texto"])
-
                 elif t == "estado":
                     self._lbl_estado.config(text=msg["texto"])
-
                 elif t == "paso_inicio":
-                    self._set_paso(msg["id"], "►", GOLD, GOLD)
-
+                    self._set_paso(msg["id"], "►", ACCENT, TEXT)
                 elif t in ("paso_ok", "paso_error", "paso_skip"):
                     self._pasos_completados += 1
                     pct = int(self._pasos_completados / self._total_pasos * 100)
@@ -780,17 +993,14 @@ class HefestosApp:
                         self._set_paso(msg["id"], "✗", RED,   RED)
                     else:
                         self._set_paso(msg["id"], "–", GRAY,  GRAY)
-
                 elif t == "fin":
                     self._progress["value"] = 100
                     self._animacion.detener()
-                    self._lbl_estado.config(text="Instalacion completada.")
+                    self._lbl_estado.config(text="Instalación completada.")
                     self._mostrar_final()
                     return
-
         except queue.Empty:
             pass
-
         self.root.after(120, self._procesar_cola)
 
     def _set_paso(self, pid: str, ico: str, ic: str, lc: str):
@@ -813,7 +1023,7 @@ class HefestosApp:
                 try:
                     resultado = self._ejecutar_paso(paso)
                 except Exception as exc:
-                    self._emit(tipo="log", texto=f"EXCEPCION: {exc}")
+                    self._emit(tipo="log", texto=f"EXCEPCIÓN: {exc}")
                     resultado = False
                 if resultado == "skip":
                     self._emit(tipo="paso_skip", id=paso["id"])
@@ -821,7 +1031,6 @@ class HefestosApp:
                     self._emit(tipo="paso_ok", id=paso["id"])
                 else:
                     self._emit(tipo="paso_error", id=paso["id"])
-
         self._emit(tipo="fin")
 
     def _ejecutar_paso(self, paso: dict) -> bool:
@@ -855,7 +1064,7 @@ class HefestosApp:
 
         if tipo == "descarga":
             url     = f"{OLYMPUS_RAW}/{paso['url']}"
-            destino = self._eclipse_dir / paso["destino"]   # type: ignore
+            destino = self._eclipse_dir / paso["destino"]  # type: ignore
             return self._descargar_archivo(url, destino, paso["url"])
 
         if tipo == "verificar_app":
@@ -875,8 +1084,7 @@ class HefestosApp:
 
     # ── Implementaciones ─────────────────────────────────────────────────────
 
-    def _paquetes_faltantes(self, paquetes: list[str]) -> list[str]:
-        """Devuelve solo los paquetes que no están instalados (via pip show)."""
+    def _paquetes_faltantes(self, paquetes: list) -> list:
         python = self._get_python()
         faltantes = []
         for pkg in paquetes:
@@ -887,7 +1095,7 @@ class HefestosApp:
                 faltantes.append(pkg)
         return faltantes
 
-    def _pip(self, args: list[str]) -> bool:
+    def _pip(self, args: list) -> bool:
         result = subprocess.run(
             [self._get_python(), "-m", "pip"] + args,
             capture_output=True, text=True,
@@ -899,12 +1107,16 @@ class HefestosApp:
         return result.returncode == 0
 
     def _descargar_modelo_whisper(self, modelo: str, mb) -> bool:
+        modelos_dir = _BASE_DIR / "modelos"
+        modelos_dir.mkdir(exist_ok=True)
         self._emit(tipo="log",
                     texto=f"Descargando modelo Whisper {modelo} ({mb} MB)…")
+        self._emit(tipo="log", texto=f"Destino: {modelos_dir}")
         try:
             result = subprocess.run(
                 [self._get_python(), "-c",
-                 f"import whisper; whisper.load_model('{modelo}'); print('OK')"],
+                 f"import whisper; whisper.load_model('{modelo}', "
+                 f"download_root=r'{modelos_dir}'); print('OK')"],
                 capture_output=True, text=True, timeout=600,
             )
             for linea in (result.stdout + result.stderr).strip().splitlines()[-5:]:
@@ -960,7 +1172,7 @@ class HefestosApp:
                 if not exe_src.exists():
                     self._emit(tipo="log", texto="geckodriver.exe no encontrado en ZIP")
                     return False
-                dest = self._eclipse_dir / "geckodriver.exe"   # type: ignore
+                dest = self._eclipse_dir / "geckodriver.exe"  # type: ignore
                 shutil.copy2(str(exe_src), str(dest))
             self._emit(tipo="log", texto=f"geckodriver instalado en {dest.name}")
             return True
@@ -969,7 +1181,7 @@ class HefestosApp:
             return False
 
     def _correr_script(self, script_rel: str) -> bool:
-        script = self._eclipse_dir / script_rel   # type: ignore
+        script = self._eclipse_dir / script_rel  # type: ignore
         if not script.exists():
             self._emit(tipo="log", texto=f"Script no encontrado: {script_rel}")
             return False
@@ -985,7 +1197,7 @@ class HefestosApp:
 
     def _test_arranque(self) -> bool:
         for nombre in ("eclipse_t_v3.py", "eclipse_t_v2.py"):
-            exe = self._eclipse_dir / nombre   # type: ignore
+            exe = self._eclipse_dir / nombre  # type: ignore
             if exe.exists():
                 self._emit(tipo="log", texto=f"Verificando sintaxis de {nombre}…")
                 result = subprocess.run(
@@ -997,100 +1209,93 @@ class HefestosApp:
                     return True
                 self._emit(tipo="log", texto=result.stderr[:300])
                 return False
-        self._emit(tipo="log",
-                    texto="eclipse_t_v2.py / eclipse_t_v3.py no encontrado")
+        self._emit(tipo="log", texto="eclipse_t_v3.py no encontrado")
         return False
 
-    # ── Pantalla 4: Final ────────────────────────────────────────────────────
+    # ── Pantalla 5: Final ────────────────────────────────────────────────────
 
     def _construir_final(self):
         fr = self._f_final
 
-        tk.Frame(fr, height=20, bg=BG).pack()
+        tk.Frame(fr, bg=BG, height=16).pack()
 
-        self._logo_img_fin = _cargar_logo_tk(height=130)
-        if self._logo_img_fin:
-            tk.Label(fr, image=self._logo_img_fin, bg=BG).pack(pady=(10, 0))
-        else:
-            cv = tk.Canvas(fr, width=160, height=160, bg=BG, highlightthickness=0)
-            cv.pack()
-            dibujar_logo(cv, 80, 80, s=0.8)
+        cv_logo = tk.Canvas(fr, width=140, height=140, bg=ANIM_BG,
+                             highlightthickness=2, highlightbackground=GOLD)
+        cv_logo.pack(pady=(0, 4))
+        dibujar_logo(cv_logo, 70, 70, s=0.72)
 
-        self._lbl_fin_titulo = tk.Label(
-            fr, text="Instalacion completada",
-            font=("Helvetica", 17, "bold"), fg=GREEN, bg=BG,
-        )
-        self._lbl_fin_titulo.pack(pady=(16, 6))
+        tk.Label(fr, text="Instalación completada",
+                 font=("Georgia", 17, "bold"), fg=GREEN, bg=BG).pack(pady=(14, 4))
 
-        self._lbl_fin_detalle = tk.Label(
-            fr,
-            text="Todos los componentes estan instalados.\n"
-                 "ECLIPSE-T esta listo para su uso.",
-            font=("Helvetica", 10), fg=LIGHT, bg=BG, justify="center",
-        )
-        self._lbl_fin_detalle.pack(pady=(0, 20))
+        tk.Label(fr,
+                 text="Todos los componentes están instalados.\n"
+                      "ECLIPSE-T está listo para su uso.",
+                 font=("Georgia", 10), fg=TEXT, bg=BG, justify="center",
+                 ).pack(pady=(0, 16))
 
-        # Botón principal
-        tk.Button(
-            fr, text="  Abrir ECLIPSE-T  ▶  ",
-            font=("Helvetica", 14, "bold"),
-            bg=GOLD, fg=DARK, relief="flat", padx=20, pady=10,
-            activebackground="#D4891A",
-            command=self._abrir_eclipse,
-        ).pack(pady=(0, 10))
+        tk.Button(fr, text="  Abrir ECLIPSE-T  ▶  ",
+                  font=("Georgia", 13, "bold"),
+                  bg=ACCENT, fg="white", relief="flat", padx=18, pady=9,
+                  activebackground="#A87018",
+                  command=self._abrir_eclipse).pack(pady=(0, 8))
 
         # Aviso Firefox / HELIOS
-        aviso = tk.Frame(fr, bg="#1E2A1E", padx=10, pady=6)
-        aviso.pack(fill="x", padx=40, pady=(4, 2))
+        aviso = tk.Frame(fr, bg=BG2, relief="groove", bd=1)
+        aviso.pack(fill="x", padx=50, pady=(4, 2))
         tk.Label(aviso,
-                 text="⚠  HELIOS (historial laboratorio) requiere Mozilla Firefox",
-                 font=("Helvetica", 9, "bold"), fg="#FFD700", bg="#1E2A1E",
-                 ).pack(anchor="w")
+                 text="⚠  HELIOS requiere Mozilla Firefox instalado",
+                 font=("Georgia", 9, "bold"), fg=RED, bg=BG2).pack(anchor="w", padx=8, pady=(6, 2))
         tk.Label(aviso,
-                 text="Instale Firefox antes de usar HELIOS, ECLIPSE-T u otros\n"
-                      "programas del ecosistema OLYMPUS que accedan a IRIS.",
-                 font=("Helvetica", 8), fg=LIGHT, bg="#1E2A1E", justify="left",
-                 ).pack(anchor="w")
+                 text="Instale Firefox antes de usar HELIOS u otros componentes\n"
+                      "del ecosistema OLYMPUS que accedan a laboratorio.",
+                 font=("Georgia", 8), fg=DIM, bg=BG2, justify="left").pack(anchor="w", padx=8)
         tk.Button(aviso, text="Descargar Firefox →",
-                  font=("Helvetica", 8), bg="#0060DF", fg="white",
+                  font=("Georgia", 8), bg="#0060DF", fg="white",
                   relief="flat", padx=8, pady=3,
                   command=lambda: __import__("webbrowser").open(
-                      "https://www.mozilla.org/firefox/")).pack(anchor="w", pady=(4, 0))
+                      "https://www.mozilla.org/firefox/")).pack(anchor="w", padx=8, pady=(4, 6))
 
-        # Separador
-        tk.Frame(fr, height=1, bg=GRAY).pack(fill="x", padx=80, pady=(10, 8))
+        tk.Frame(fr, height=1, bg=DARK).pack(fill="x", padx=80, pady=(10, 6))
 
-        # Botón compilar EXE
-        self._lbl_rebuild = tk.Label(
-            fr,
-            text="Opcional: compilar ECLIPSE-T.exe (~26 min)",
-            font=("Helvetica", 9), fg=GRAY, bg=BG,
-        )
-        self._lbl_rebuild.pack()
-
+        # Rebuild EXE
+        tk.Label(fr, text="Opcional: compilar ECLIPSE-T.exe (~26 min)",
+                 font=("Georgia", 9), fg=DIM, bg=BG).pack()
         self._btn_rebuild = tk.Button(
             fr, text="Compilar ECLIPSE-T.exe",
-            font=("Helvetica", 10), bg=DARK, fg=GOLD,
+            font=("Georgia", 10), bg=BG2, fg=GOLD,
             relief="flat", padx=14, pady=5,
-            command=self._iniciar_rebuild,
-        )
-        self._btn_rebuild.pack(pady=(4, 6))
-
-        self._lbl_rebuild_estado = tk.Label(
-            fr, text="", font=("Helvetica", 9, "italic"),
-            fg=GOLD, bg=BG,
-        )
+            command=self._iniciar_rebuild)
+        self._btn_rebuild.pack(pady=(4, 4))
+        self._lbl_rebuild_estado = tk.Label(fr, text="",
+                                             font=("Georgia", 9, "italic"),
+                                             fg=GOLD, bg=BG)
         self._lbl_rebuild_estado.pack()
 
-        tk.Button(
-            fr, text="Cerrar",
-            font=("Helvetica", 10), bg=GRAY, fg=LIGHT,
-            relief="flat", padx=16, pady=6,
-            command=self.root.destroy,
-        ).pack(pady=(10, 0))
+        tk.Button(fr, text="Cerrar",
+                  font=("Georgia", 10), bg=DARK, fg=TEXT,
+                  relief="flat", padx=16, pady=6,
+                  command=self.root.destroy).pack(pady=(8, 0))
 
     def _mostrar_final(self):
         self._mostrar(self._f_final)
+        self.root.after(800, self._sugerir_tc)
+
+    def _sugerir_tc(self):
+        respuesta = messagebox.askyesno(
+            "Términos y Condiciones",
+            "El uso de este software mediante una clave de activación implica\n"
+            "la aceptación de los Términos y Condiciones del ecosistema OLYMPUS.\n\n"
+            "¿Desea revisarlos ahora?",
+            parent=self.root
+        )
+        if respuesta:
+            messagebox.showinfo(
+                "Términos y Condiciones",
+                "Los Términos y Condiciones de uso se encuentran en preparación.\n\n"
+                "Para consultas o más información, contacte al desarrollador:\n"
+                "n.vargas.med@gmail.com",
+                parent=self.root
+            )
 
     def _abrir_eclipse(self):
         if not self._eclipse_dir:
@@ -1106,7 +1311,7 @@ class HefestosApp:
                 return
         messagebox.showerror(
             "No encontrado",
-            f"No se encontro eclipse_t_v2.py ni eclipse_t_v3.py\nen {self._eclipse_dir}",
+            f"No se encontró eclipse_t_v3.py en {self._eclipse_dir}",
         )
 
     # ── Rebuild EXE ──────────────────────────────────────────────────────────
@@ -1118,16 +1323,11 @@ class HefestosApp:
         if not build_py.exists():
             messagebox.showerror("Error", f"build.py no encontrado en {self._eclipse_dir}")
             return
-
         self._btn_rebuild.config(state="disabled", text="Compilando…")
         self._lbl_rebuild_estado.config(
             text="Compilando ECLIPSE-T.exe (~26 min) — no cerrar la ventana", fg=GOLD)
-
-        threading.Thread(
-            target=self._correr_rebuild,
-            args=(build_py,),
-            daemon=True,
-        ).start()
+        threading.Thread(target=self._correr_rebuild, args=(build_py,),
+                         daemon=True).start()
 
     def _correr_rebuild(self, build_py: Path):
         try:
@@ -1135,7 +1335,7 @@ class HefestosApp:
                 [sys.executable, str(build_py)],
                 capture_output=True, text=True,
                 cwd=str(self._eclipse_dir),
-                timeout=2400,   # 40 min max
+                timeout=2400,
             )
             if result.returncode == 0:
                 self.root.after(0, self._rebuild_ok)
@@ -1148,14 +1348,13 @@ class HefestosApp:
             self.root.after(0, lambda: self._rebuild_error(str(exc)))
 
     def _rebuild_ok(self):
-        self._btn_rebuild.config(state="disabled", text="EXE compilado ✓", bg=GREEN)
-        self._lbl_rebuild_estado.config(
-            text="ECLIPSE-T.exe generado en dist/", fg=GREEN)
+        self._btn_rebuild.config(state="disabled", text="EXE compilado ✓", bg=GREEN, fg="white")
+        self._lbl_rebuild_estado.config(text="ECLIPSE-T.exe generado en dist/", fg=GREEN)
 
     def _rebuild_error(self, msg: str):
-        self._btn_rebuild.config(state="normal", text="Reintentar compilacion")
+        self._btn_rebuild.config(state="normal", text="Reintentar compilación")
         self._lbl_rebuild_estado.config(
-            text=f"Error en compilacion: {msg[:80]}", fg=RED)
+            text=f"Error en compilación: {msg[:80]}", fg=RED)
 
     # ── Run ──────────────────────────────────────────────────────────────────
 
