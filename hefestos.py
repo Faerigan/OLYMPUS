@@ -6,10 +6,12 @@ Ecosistema OLYMPUS · CESFAM Cerrillos de Tamaya
 import hashlib
 import json
 import math
+import os
 import platform
 import queue
 import random
 import shutil
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -17,6 +19,9 @@ import threading
 import urllib.request
 import zipfile
 from pathlib import Path
+
+# Python 3.14: CA con Basic Constraints no crítico rompe verificación en exe compilado
+ssl._create_default_https_context = ssl._create_unverified_context
 # DPI awareness — Windows HiDPI (debe ir antes de crear Tk)
 try:
     from ctypes import windll
