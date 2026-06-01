@@ -17,6 +17,13 @@ import threading
 import urllib.request
 import zipfile
 from pathlib import Path
+# DPI awareness — Windows HiDPI (debe ir antes de crear Tk)
+try:
+    from ctypes import windll
+    windll.shcore.SetProcessDpiAwareness(1)
+except Exception:
+    pass
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
@@ -32,7 +39,24 @@ _BASE_DIR = (Path(sys._MEIPASS) if getattr(sys, "frozen", False)
              else Path(__file__).parent)
 sys.path.insert(0, str(_BASE_DIR))
 
-OLYMPUS_RAW = "https://raw.githubusercontent.com/Faerigan/OLYMPUS/main"
+def resource_path(rel: str) -> str:
+    """Resuelve rutas de recursos compatible con PyInstaller (_MEIPASS)."""
+    return str(_BASE_DIR / rel)
+
+OLYMPUS_RAW   = "https://raw.githubusercontent.com/Faerigan/OLYMPUS/main"
+_ECLIPSE_REPO = "Faerigan/eclipse-t"   # repo privado — releases con los EXEs
+
+
+def _cargar_github_token() -> str:
+    """Intenta importar el token de hefestos_key_validator (archivo privado)."""
+    try:
+        import importlib, sys as _sys
+        # Buscar en el directorio de HEFESTOS
+        _sys.path.insert(0, str(_BASE_DIR))
+        mod = importlib.import_module("hefestos_key_validator")
+        return getattr(mod, "_GITHUB_TOKEN", "") or ""
+    except Exception:
+        return ""
 
 # ── Paleta crema / arquitectura griega ───────────────────────────────────────
 BG      = "#FAF6EE"   # fondo crema cálido
@@ -176,6 +200,70 @@ def dibujar_logo(canvas: tk.Canvas, cx: int, cy: int, s: float = 1.0):
                              fill=METAL, outline="#E8E8E8", width=1)
 
 
+# ── AnimacionForja (GIF) ─────────────────────────────────────────────────────
+
+class AnimacionForja:
+    """
+    Reproduce Resources/hefestos_forge.gif en un tk.Canvas.
+    Fallo silencioso si el GIF no existe — nunca crashea.
+    """
+
+    def __init__(self, canvas: tk.Canvas, ancho: int = 300, alto: int = 300):
+        self._canvas  = canvas
+        self._ancho   = ancho
+        self._alto    = alto
+        self._frames: list = []
+        self._delays: list = []
+        self._idx    = 0
+        self._job    = None
+        self._img_id = None
+        self._cargado = False
+        self._cargar()
+
+    def _cargar(self):
+        ruta = resource_path(os.path.join("Resources", "hefestos_forge.gif"))
+        if not os.path.exists(ruta):
+            return
+        try:
+            from PIL import Image, ImageTk
+            gif = Image.open(ruta)
+            for i in range(gif.n_frames):
+                gif.seek(i)
+                frame_img = gif.convert("RGBA")
+                if frame_img.size != (self._ancho, self._alto):
+                    frame_img = frame_img.resize((self._ancho, self._alto), Image.LANCZOS)
+                photo = ImageTk.PhotoImage(frame_img)
+                self._frames.append(photo)
+                self._delays.append(gif.info.get("duration", 150))
+            self._cargado = True
+        except Exception:
+            pass
+
+    def iniciar(self):
+        if not self._cargado or not self._frames:
+            return
+        self._idx = 0
+        self._reproducir()
+
+    def _reproducir(self):
+        if not self._frames:
+            return
+        frame = self._frames[self._idx]
+        delay = self._delays[self._idx]
+        if self._img_id is None:
+            self._img_id = self._canvas.create_image(
+                self._ancho // 2, self._alto // 2, image=frame, anchor="center")
+        else:
+            self._canvas.itemconfig(self._img_id, image=frame)
+        self._idx = (self._idx + 1) % len(self._frames)
+        self._job = self._canvas.after(delay, self._reproducir)
+
+    def detener(self):
+        if self._job is not None:
+            self._canvas.after_cancel(self._job)
+            self._job = None
+
+
 # ── HefestosAnimacion ────────────────────────────────────────────────────────
 
 class HefestosAnimacion(tk.Canvas):
@@ -312,7 +400,16 @@ class HefestosApp:
         self.root.title("HEFESTOS v2.0 — Instalador Ecosistema OLYMPUS")
         self.root.configure(bg=BG)
         self.root.resizable(False, False)
-        self.root.geometry("700x760")
+        self.root.withdraw()  # ocultar hasta centrar
+        self.root.update_idletasks()
+        w, h = 700, 760
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        x = max(0, (sw - w) // 2)
+        y = max(0, (sh - h) // 2)
+        self.root.geometry(f"{w}x{h}+{x}+{y}")
+        self.root.deiconify()  # mostrar ya centrada
+        self.root.protocol("WM_DELETE_WINDOW", self._cerrar)
 
         self._cola:                 queue.Queue = queue.Queue()
         self._eclipse_dir:          Path | None = None
@@ -406,7 +503,14 @@ class HefestosApp:
         cv_logo = tk.Canvas(fr, width=180, height=180, bg=ANIM_BG,
                              highlightthickness=2, highlightbackground=GOLD)
         cv_logo.pack(pady=(0, 4))
-        dibujar_logo(cv_logo, 90, 90, s=0.9)
+        try:
+            from PIL import Image, ImageTk
+            _img = Image.open(resource_path(os.path.join("Resources", "HEFESTOS.png")))
+            _img = _img.resize((176, 176), Image.LANCZOS)
+            self._logo_inicio = ImageTk.PhotoImage(_img)   # retener referencia
+            cv_logo.create_image(90, 90, image=self._logo_inicio, anchor="center")
+        except Exception:
+            dibujar_logo(cv_logo, 90, 90, s=0.9)
 
         tk.Label(fr, text="HEFESTOS", font=("Georgia", 24, "bold"),
                  fg=GOLD, bg=BG).pack(pady=(8, 0))
@@ -453,15 +557,13 @@ class HefestosApp:
     def _detectar_eclipse(self):
         for p in self._ECLIPSE_CANDIDATOS:
             if p.exists() and (
+                (p / "ECLIPSE-T.exe").exists() or
                 (p / "eclipse_t_v3.py").exists() or
                 (p / "eclipse_t_v2.py").exists()
             ):
                 self._var_dir.set(str(p))
                 self._eclipse_dir = p
-                # Si ya hay centros configurados → modo reconfig
-                if (p / "resources" / "centros.dat").exists():
-                    self.root.after(200, lambda: self._mostrar(self._f_reconfig))
-                    self._poblar_reconfig()
+                # Solo pre-rellena el directorio — la clave siempre valida primero
                 return
 
     def _seleccionar_dir(self):
@@ -511,6 +613,27 @@ class HefestosApp:
 
         if self._es_maestra:
             self._aplicar_defaults_maestra()
+
+        # ── Bifurcación: ¿ya hay centros configurados? ───────────────────────
+        centros_dat = eclipse_dir / "resources" / "centros.dat"
+        if centros_dat.exists():
+            respuesta = messagebox.askyesno(
+                "HEFESTOS — Ya configurado",
+                "Este equipo ya tiene ECLIPSE-T instalado y configurado.\n\n"
+                "¿Desea AGREGAR un nuevo centro de salud?\n\n"
+                "   Sí  →  Agregar nuevo centro (consume esta clave)\n"
+                "   No  →  Cambiar centro activo (sin reinstalar)",
+                parent=self.root,
+                icon="question",
+            )
+            if respuesta:
+                self._modo_agregar_centro = True
+                self._mostrar(self._f_config)
+            else:
+                self._poblar_reconfig()
+                self._mostrar(self._f_reconfig)
+            return
+
         self._mostrar(self._f_config)
 
     def _validar_clave(self, clave: str) -> tuple:
@@ -645,17 +768,21 @@ class HefestosApp:
         tk.Frame(fr, height=2, bg=GOLD).pack(fill="x", padx=40, pady=(10, 6))
 
         # Cuerpo scrollable
-        cv_wrap = tk.Canvas(fr, bg=BG, highlightthickness=0)
-        sb = ttk.Scrollbar(fr, orient="vertical", command=cv_wrap.yview)
-        cv_wrap.configure(yscrollcommand=sb.set)
+        wrap = tk.Frame(fr, bg=BG)
+        wrap.pack(fill="both", expand=True)
+        sb = ttk.Scrollbar(wrap, orient="vertical")
         sb.pack(side="right", fill="y")
-        cv_wrap.pack(fill="both", expand=True, padx=(12, 0))
+        cv_wrap = tk.Canvas(wrap, bg=BG, highlightthickness=0,
+                            yscrollcommand=sb.set)
+        cv_wrap.pack(side="left", fill="both", expand=True)
+        sb.config(command=cv_wrap.yview)
 
         body = tk.Frame(cv_wrap, bg=BG)
         body_id = cv_wrap.create_window((0, 0), window=body, anchor="nw")
 
         def _on_resize(e):
             cv_wrap.itemconfig(body_id, width=e.width)
+            cv_wrap.configure(scrollregion=cv_wrap.bbox("all"))
         cv_wrap.bind("<Configure>", _on_resize)
         body.bind("<Configure>",
                   lambda e: cv_wrap.configure(scrollregion=cv_wrap.bbox("all")))
@@ -676,25 +803,27 @@ class HefestosApp:
         lf2 = tk.LabelFrame(body, text="  Laboratorio (HELIOS)  ", **lf_kw)
         lf2.pack(fill="x", padx=8, pady=4)
 
-        tk.Label(lf2, text="Tipo:", bg=BG, fg=TEXT, font=("Georgia", 9)).grid(
-            row=0, column=0, padx=(8, 2), pady=3, sticky="w")
+        # Fila tipo conector — sub-frame con pack para evitar overflow de grid
+        fila_tipo = tk.Frame(lf2, bg=BG)
+        fila_tipo.grid(row=0, column=0, columnspan=4, sticky="w", padx=4, pady=3)
+        tk.Label(fila_tipo, text="Tipo:", bg=BG, fg=TEXT,
+                 font=("Georgia", 9)).pack(side="left", padx=(4, 6))
         self._cfg["conector_lab"] = tk.StringVar(value="iris")
-        for i, (val, txt) in enumerate([("iris", "IRIS (red local)"),
-                                         ("redclinica", "Red Clínica (internet)"),
-                                         ("ninguno", "Sin laboratorio")]):
-            tk.Radiobutton(lf2, text=txt, variable=self._cfg["conector_lab"],
+        for val, txt in [("iris", "IRIS (red local)"),
+                          ("redclinica", "Red Clínica (internet)"),
+                          ("ninguno", "Sin laboratorio")]:
+            tk.Radiobutton(fila_tipo, text=txt, variable=self._cfg["conector_lab"],
                            value=val, bg=BG, fg=TEXT, selectcolor=BG2,
                            activebackground=BG,
-                           font=("Georgia", 9)).grid(row=0, column=i+1,
-                                                      padx=4, pady=3, sticky="w")
+                           font=("Georgia", 9)).pack(side="left", padx=(0, 10))
 
         self._campo(lf2, "URL IRIS:", "iris_url",
-                    "http://207.248.201.73:8080/irisconsultorio/", width=40, row=1)
-        self._campo(lf2, "Usuario IRIS:", "iris_usuario", "", width=18, row=2, col=0)
+                    "http://207.248.201.73:8080/irisconsultorio/", width=34, row=1)
+        self._campo(lf2, "Usuario IRIS:", "iris_usuario", "", width=16, row=2, col=0)
         self._campo_pass(lf2, "Contraseña:", "iris_password", row=2, col=2)
         self._campo(lf2, "URL RedClínica:", "redclinica_url",
-                    "https://examenes.redclinica.cl", width=40, row=3)
-        self._campo(lf2, "Usuario RedClínica:", "redclinica_usuario", "", width=18, row=4, col=0)
+                    "https://examenes.redclinica.cl", width=34, row=3)
+        self._campo(lf2, "Usuario RedClínica:", "redclinica_usuario", "", width=16, row=4, col=0)
         self._campo_pass(lf2, "Contraseña:", "redclinica_password", row=4, col=2)
 
         if not _CRYPTO_OK:
@@ -723,8 +852,8 @@ class HefestosApp:
         self._fila_logo(lf4, "Logo principal:",   "logo_principal",  row=1)
         self._fila_logo(lf4, "Logo secundario:",  "logo_secundario", row=2)
 
-        # Botones
-        btns = tk.Frame(fr, bg=BG)
+        # Botones — dentro del body scrollable para que siempre sean visibles
+        btns = tk.Frame(body, bg=BG)
         btns.pack(pady=(8, 14))
         tk.Button(btns, text="Omitir por ahora",
                   font=("Georgia", 10), bg=DARK, fg=TEXT,
@@ -906,11 +1035,16 @@ class HefestosApp:
                  font=("Georgia", 12, "bold"), fg=GOLD, bg=DARK).pack(
                      side="left", padx=16, pady=10)
 
-        # Canvas de animación enmarcado (oscuro sobre fondo crema)
+        # Canvas GIF enmarcado (oscuro sobre fondo crema)
         anim_frame = tk.Frame(fr, bg=BG, pady=6)
         anim_frame.pack()
-        self._animacion = HefestosAnimacion(anim_frame)
-        self._animacion.pack()
+        canvas_forge = tk.Canvas(
+            anim_frame, width=300, height=300,
+            bg=ANIM_BG, highlightthickness=3,
+            highlightbackground=GOLD,
+        )
+        canvas_forge.pack()
+        self._animacion = AnimacionForja(canvas_forge, ancho=300, alto=300)
 
         # Lista de pasos
         pasos_frame = tk.Frame(fr, bg=BG)
@@ -1015,7 +1149,35 @@ class HefestosApp:
 
     # ── Ejecución de pasos (hilo) ────────────────────────────────────────────
 
+    def _get_exe_destino(self, asset: str, dest_key: str) -> "Path | None":
+        """Devuelve la ruta absoluta donde se instalará un asset github_release."""
+        if not self._eclipse_dir:
+            return None
+        if dest_key == "eclipse_dir":
+            return self._eclipse_dir / asset
+        if dest_key == "helios_dir":
+            return self._eclipse_dir.parent / "HELIOS" / asset
+        return _BASE_DIR / asset
+
     def _ejecutar_instalacion(self):
+        # ── Pre-check: estado de ejecutables antes de empezar ────────────────
+        self._emit(tipo="log", texto="── Verificación previa ──────────────────")
+        for grupo in self._manifest["grupos"]:
+            for paso in grupo["pasos"]:
+                if paso["tipo"] == "github_release":
+                    destino = self._get_exe_destino(
+                        paso["asset"], paso.get("destino", "eclipse_dir")
+                    )
+                    if destino and destino.exists() and destino.stat().st_size > 1_048_576:
+                        mb = destino.stat().st_size // (1024 * 1024)
+                        self._emit(tipo="log",
+                                    texto=f"  ✓ {paso['asset']}  —  ya presente ({mb} MB), se omite descarga")
+                    else:
+                        self._emit(tipo="log",
+                                    texto=f"  ↓ {paso['asset']}  —  no encontrado, se descargará")
+        self._emit(tipo="log", texto="─────────────────────────────────────────")
+
+        # ── Ejecución del manifest ────────────────────────────────────────────
         for grupo in self._manifest["grupos"]:
             for paso in grupo["pasos"]:
                 self._emit(tipo="estado", texto=f"{paso['desc']}…")
@@ -1079,6 +1241,20 @@ class HefestosApp:
         if tipo == "test_arranque":
             return self._test_arranque()
 
+        if tipo == "github_release":
+            asset    = paso["asset"]
+            dest_key = paso.get("destino", "eclipse_dir")
+            mb_est   = paso.get("mb", "?")
+            if dest_key == "eclipse_dir":
+                destino = self._eclipse_dir / asset          # type: ignore
+            elif dest_key == "helios_dir":
+                helios_dir = self._eclipse_dir.parent / "HELIOS"  # type: ignore
+                helios_dir.mkdir(exist_ok=True)
+                destino = helios_dir / asset
+            else:
+                destino = _BASE_DIR / asset
+            return self._descargar_release_github(asset, destino, mb_est)
+
         self._emit(tipo="log", texto=f"Tipo desconocido: {tipo}")
         return False
 
@@ -1100,6 +1276,16 @@ class HefestosApp:
             [self._get_python(), "-m", "pip"] + args,
             capture_output=True, text=True,
         )
+        # Si falla y es un install, reintentar con --user (sin permisos de admin)
+        if result.returncode != 0 and args and args[0] == "install" and "--user" not in args:
+            salida = (result.stdout + result.stderr).lower()
+            if any(k in salida for k in ("permission", "access", "denied", "read-only",
+                                          "permissionerror", "cannot install")):
+                self._emit(tipo="log", texto="Sin permisos de admin — reintentando con --user…")
+                result = subprocess.run(
+                    [self._get_python(), "-m", "pip"] + args + ["--user"],
+                    capture_output=True, text=True,
+                )
         for linea in (result.stdout + result.stderr).strip().splitlines()[-6:]:
             self._emit(tipo="log", texto=linea)
         if result.returncode == 0:
@@ -1124,6 +1310,112 @@ class HefestosApp:
             return result.returncode == 0
         except subprocess.TimeoutExpired:
             self._emit(tipo="log", texto="Timeout (>10 min) descargando modelo")
+            return False
+
+    def _descargar_release_github(self, asset_name: str, destino: Path,
+                                    mb_est) -> "bool | str":
+        """
+        Descarga un asset del último release del repo privado eclipse-t.
+        Usa el token de hefestos_key_validator._GITHUB_TOKEN.
+        Salta si el archivo ya existe y tiene tamaño razonable (> 1 MB).
+        """
+        import json as _json
+
+        # ── 1. Verificar si ya existe ────────────────────────────────────────
+        if destino.exists() and destino.stat().st_size > 1_048_576:
+            self._emit(tipo="log",
+                        texto=f"{asset_name} ya presente ({destino.stat().st_size // (1024*1024)} MB) — omitiendo")
+            return "skip"
+
+        # ── 2. Token ─────────────────────────────────────────────────────────
+        token = _cargar_github_token()
+        if not token:
+            self._emit(tipo="log",
+                        texto=f"WARN: sin token GitHub — {asset_name} no descargado automáticamente")
+            self._emit(tipo="log",
+                        texto=f"  Copie {asset_name} manualmente a: {destino.parent}")
+            return "skip"
+
+        # ── 3. Obtener info del último release ───────────────────────────────
+        api_url = f"https://api.github.com/repos/{_ECLIPSE_REPO}/releases/latest"
+        headers_api = {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github.v3+json",
+            "User-Agent": "HEFESTOS-installer/2.0",
+        }
+        self._emit(tipo="log", texto=f"Consultando releases de {_ECLIPSE_REPO}…")
+        try:
+            req = urllib.request.Request(api_url, headers=headers_api)
+            with urllib.request.urlopen(req, timeout=30) as r:
+                release = _json.loads(r.read())
+        except Exception as exc:
+            self._emit(tipo="log", texto=f"Error accediendo al release: {exc}")
+            return False
+
+        tag = release.get("tag_name", "desconocida")
+        self._emit(tipo="log", texto=f"Release encontrado: {tag}")
+
+        # ── 4. Localizar asset ───────────────────────────────────────────────
+        asset_info = None
+        for a in release.get("assets", []):
+            if a["name"] == asset_name:
+                asset_info = a
+                break
+
+        if not asset_info:
+            nombres = [a["name"] for a in release.get("assets", [])]
+            self._emit(tipo="log",
+                        texto=f"{asset_name} no encontrado en release {tag}")
+            self._emit(tipo="log",
+                        texto=f"  Assets disponibles: {nombres}")
+            return False
+
+        total = asset_info.get("size", 0)
+        total_mb = total / (1024 * 1024)
+        self._emit(tipo="log",
+                    texto=f"Descargando {asset_name}  ({total_mb:.0f} MB)…")
+        self._emit(tipo="log", texto=f"  Destino: {destino}")
+
+        # ── 5. Descargar en streaming con progreso cada ~50 MB ───────────────
+        headers_dl = {
+            "Authorization": f"token {token}",
+            "Accept": "application/octet-stream",
+            "User-Agent": "HEFESTOS-installer/2.0",
+        }
+        CHUNK      = 1024 * 1024          # 1 MB por lectura
+        LOG_CADA   = 50 * 1024 * 1024     # log cada 50 MB
+        siguiente_log = LOG_CADA
+
+        try:
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            req_dl = urllib.request.Request(asset_info["url"], headers=headers_dl)
+            with urllib.request.urlopen(req_dl, timeout=600) as r, \
+                 open(destino, "wb") as fh:
+                descargado = 0
+                while True:
+                    chunk = r.read(CHUNK)
+                    if not chunk:
+                        break
+                    fh.write(chunk)
+                    descargado += len(chunk)
+                    if descargado >= siguiente_log:
+                        pct = int(descargado / total * 100) if total else 0
+                        mb_done = descargado / (1024 * 1024)
+                        self._emit(tipo="log",
+                                    texto=f"  {mb_done:.0f} / {total_mb:.0f} MB  ({pct}%)")
+                        siguiente_log += LOG_CADA
+
+            final_mb = destino.stat().st_size / (1024 * 1024)
+            self._emit(tipo="log",
+                        texto=f"  ✓ {asset_name} descargado — {final_mb:.1f} MB")
+            return True
+
+        except Exception as exc:
+            self._emit(tipo="log", texto=f"Error descargando {asset_name}: {exc}")
+            try:
+                destino.unlink(missing_ok=True)
+            except Exception:
+                pass
             return False
 
     def _descargar_archivo(self, url: str, destino: Path, nombre: str) -> bool:
@@ -1300,18 +1592,25 @@ class HefestosApp:
     def _abrir_eclipse(self):
         if not self._eclipse_dir:
             return
+        # Intentar ejecutable compilado primero
+        exe_compilado = self._eclipse_dir / "ECLIPSE-T.exe"
+        if exe_compilado.exists():
+            subprocess.Popen([str(exe_compilado)], cwd=str(self._eclipse_dir))
+            self.root.destroy()
+            return
+        # Fallback: fuente .py (uso en desarrollo)
         for nombre in ("eclipse_t_v3.py", "eclipse_t_v2.py"):
-            exe = self._eclipse_dir / nombre
-            if exe.exists():
+            src = self._eclipse_dir / nombre
+            if src.exists():
                 subprocess.Popen(
-                    [self._get_python(), str(exe)],
+                    [self._get_python(), str(src)],
                     cwd=str(self._eclipse_dir),
                 )
                 self.root.destroy()
                 return
         messagebox.showerror(
             "No encontrado",
-            f"No se encontró eclipse_t_v3.py en {self._eclipse_dir}",
+            f"No se encontró ECLIPSE-T.exe en {self._eclipse_dir}",
         )
 
     # ── Rebuild EXE ──────────────────────────────────────────────────────────
@@ -1357,6 +1656,15 @@ class HefestosApp:
             text=f"Error en compilación: {msg[:80]}", fg=RED)
 
     # ── Run ──────────────────────────────────────────────────────────────────
+
+    def _cerrar(self):
+        """Cierre limpio: destruye ventana y mata el proceso completo."""
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+        import os as _os
+        _os._exit(0)
 
     def run(self):
         self.root.mainloop()

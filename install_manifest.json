@@ -1,65 +1,61 @@
 {
-  "_version": "1.0",
-  "_fecha": "28.05.2026",
-  "python_min": "3.10",
-  "python_recomendado": "3.12",
+  "_version": "2.0",
+  "_fecha": "01.06.2026",
+  "_nota": "Instalacion para ejecutables .exe — sin Python requerido en equipo destino",
   "grupos": [
     {
-      "id": "prerequisitos",
-      "nombre": "Requisitos base",
-      "icono": "gear",
+      "id": "ejecutables",
+      "nombre": "Descargar ejecutables",
+      "icono": "download",
       "pasos": [
-        {"id": "python",     "desc": "Verificar Python 3.10+",     "tipo": "verificar"},
-        {"id": "pip",        "desc": "Actualizar pip + setuptools", "tipo": "pip_upgrade"}
+        {
+          "id": "dl_eclipse",
+          "desc": "Descargar ECLIPSE-T.exe (~774 MB)",
+          "tipo": "github_release",
+          "asset": "ECLIPSE-T.exe",
+          "destino": "eclipse_dir",
+          "mb": 774
+        },
+        {
+          "id": "dl_helios",
+          "desc": "Descargar HELIOS.exe",
+          "tipo": "github_release",
+          "asset": "HELIOS.exe",
+          "destino": "helios_dir",
+          "mb": 50
+        }
       ]
     },
     {
-      "id": "hermes",
-      "nombre": "HERMES — Transcripcion de voz",
-      "icono": "microphone",
-      "pasos": [
-        {"id": "pkgs_hermes","desc": "Instalar openai-whisper sounddevice rapidfuzz numpy",
-         "tipo": "pip", "paquetes": ["openai-whisper","sounddevice","rapidfuzz","numpy"]},
-        {"id": "modelo_base","desc": "Descargar modelo Whisper base (139 MB)",
-         "tipo": "whisper_model", "modelo": "base", "mb": 139},
-        {"id": "modelo_small","desc": "Descargar modelo Whisper small (461 MB)",
-         "tipo": "whisper_model", "modelo": "small", "mb": 461},
-        {"id": "vocab",      "desc": "Descargar vocabulario medico",
-         "tipo": "descarga", "url": "hermes/hermes_vocab.json",
-         "destino": "data/hermes_vocab.json"}
-      ]
-    },
-    {
-      "id": "pdf",
-      "nombre": "Generacion PDF",
-      "icono": "document",
-      "pasos": [
-        {"id": "pkgs_pdf",  "desc": "Instalar reportlab pypdf pillow cryptography",
-         "tipo": "pip", "paquetes": ["reportlab","pypdf","pillow","cryptography"]}
-      ]
-    },
-    {
-      "id": "helios",
-      "nombre": "HELIOS — Historial laboratorio IRIS",
+      "id": "helios_deps",
+      "nombre": "HELIOS — Navegador web",
       "icono": "flask",
       "pasos": [
-        {"id": "selenium",  "desc": "Instalar selenium",
-         "tipo": "pip", "paquetes": ["selenium"]},
-        {"id": "firefox",   "desc": "Verificar Firefox instalado",
-         "tipo": "verificar_app", "app": "firefox"},
-        {"id": "geckodriver","desc": "Descargar geckodriver compatible",
-         "tipo": "geckodriver"}
+        {
+          "id": "firefox",
+          "desc": "Verificar Firefox instalado",
+          "tipo": "verificar_app",
+          "app": "firefox"
+        },
+        {
+          "id": "geckodriver",
+          "desc": "Descargar geckodriver compatible",
+          "tipo": "geckodriver"
+        }
       ]
     },
     {
-      "id": "eclipse",
-      "nombre": "ECLIPSE-T",
-      "icono": "star",
+      "id": "vocab",
+      "nombre": "Vocabulario medico HERMES",
+      "icono": "microphone",
       "pasos": [
-        {"id": "datos",     "desc": "Generar catalogos CIE-10 y arsenal",
-         "tipo": "script",  "script": "scripts/generar_datos_clinicos.py"},
-        {"id": "check",     "desc": "Verificar arranque ECLIPSE-T",
-         "tipo": "test_arranque"}
+        {
+          "id": "vocab_hermes",
+          "desc": "Descargar vocabulario medico actualizado",
+          "tipo": "descarga",
+          "url": "hermes/hermes_vocab.json",
+          "destino": "data/hermes_vocab.json"
+        }
       ]
     }
   ]

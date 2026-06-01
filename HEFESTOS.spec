@@ -7,8 +7,9 @@ a = Analysis(
     datas=[
         ('install_manifest.json', '.'),
         ('hefestos_key_validator.py', '.'),
-        ('Resources/HEFESTOS.png', 'Resources'),
-        ('Resources/HEFESTOS.ico', 'Resources'),
+        ('Resources/HEFESTOS.png',        'Resources'),
+        ('Resources/HEFESTOS.ico',        'Resources'),
+        ('Resources/hefestos_forge.gif',  'Resources'),
     ],
     hiddenimports=[
         'hefestos_key_validator',

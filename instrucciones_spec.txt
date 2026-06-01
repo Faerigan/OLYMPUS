@@ -1,0 +1,68 @@
+HEFESTOS — Instrucciones de integración del GIF en HEFESTOS.spec
+═══════════════════════════════════════════════════════════════
+Fecha: 01.06.2026
+Archivo destino: E:\HEFESTOS\HEFESTOS.spec
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASO 1 — Copiar el GIF a Resources
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Copiar el archivo generado a:
+    E:\HEFESTOS\Resources\hefestos_forge.gif
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASO 2 — Editar HEFESTOS.spec
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Localizar la sección `datas` dentro del bloque Analysis():
+
+    a = Analysis(
+        ['hefestos.py'],
+        ...
+        datas=[
+            # líneas existentes...
+        ],
+        ...
+    )
+
+Agregar esta línea dentro de la lista datas (junto a los recursos existentes):
+
+    ('Resources/hefestos_forge.gif', 'Resources'),
+
+Ejemplo completo de cómo debe quedar:
+
+    datas=[
+        ('Resources/HEFESTOS.png',        'Resources'),
+        ('Resources/HEFESTOS.ico',        'Resources'),
+        ('Resources/hefestos_forge.gif',  'Resources'),   # ← AGREGAR
+        # ... otros recursos existentes
+    ],
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASO 3 — Verificar resource_path()
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Confirmar que hefestos.py contiene la función resource_path() del fragmento.
+La función detecta sys._MEIPASS automáticamente — sin cambios adicionales
+en build.py ni en el spec.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASO 4 — Verificar que build.py no necesita cambios
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+build.py compila usando HEFESTOS.spec directamente (línea: str(SPEC_FILE)).
+Con el GIF declarado en datas del .spec, PyInstaller lo embebe
+automáticamente. No se requiere modificar build.py. ✔
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASO 5 — Compilar
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    python build.py
+
+El GIF quedará embebido en dist/HEFESTOS.exe.
+En tiempo de ejecución, PyInstaller lo extrae a sys._MEIPASS\Resources\
+y resource_path() lo localiza correctamente.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NOTAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Tamaño del GIF: ~48 KB — impacto mínimo en el .exe final
+- El GIF usa loop=0 (infinito) — se detiene llamando AnimacionForja.detener()
+- AnimacionForja falla silenciosamente si el GIF no existe (sin crash)
+- PIL/Pillow ya es dependencia de hefestos.py — no se agrega overhead
