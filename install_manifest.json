@@ -1,6 +1,6 @@
 {
-  "_version": "2.0",
-  "_fecha": "01.06.2026",
+  "_version": "2.1",
+  "_fecha": "04.06.2026",
   "_nota": "Instalacion para ejecutables .exe — sin Python requerido en equipo destino",
   "grupos": [
     {
@@ -10,11 +10,11 @@
       "pasos": [
         {
           "id": "dl_eclipse",
-          "desc": "Descargar ECLIPSE-T.exe (~774 MB)",
+          "desc": "Descargar ECLIPSE-T.exe (~777 MB)",
           "tipo": "github_release",
           "asset": "ECLIPSE-T.exe",
           "destino": "eclipse_dir",
-          "mb": 774
+          "mb": 777
         },
         {
           "id": "dl_helios",
@@ -45,9 +45,24 @@
       ]
     },
     {
+      "id": "hermes_deps",
+      "nombre": "HERMES — Modelo de voz",
+      "icono": "microphone",
+      "pasos": [
+        {
+          "id": "whisper_model",
+          "desc": "Descargar modelo de voz HERMES base (~139 MB)",
+          "tipo": "descarga",
+          "url_completa": "https://openaipublic.azureedge.net/main/whisper/models/ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f668f8b0e6c6326e34e/base.pt",
+          "destino": "modelos/base.pt",
+          "mb": 139
+        }
+      ]
+    },
+    {
       "id": "vocab",
       "nombre": "Vocabulario medico HERMES",
-      "icono": "microphone",
+      "icono": "book",
       "pasos": [
         {
           "id": "vocab_hermes",

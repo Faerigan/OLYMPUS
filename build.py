@@ -14,6 +14,7 @@ Requisitos:
 
 Resultado:
     dist/HEFESTOS.exe  (~15-20 MB)
+© 2026 Dr. Nicolás Vargas · CESFAM Cerrillos de Tamaya · Todos los derechos reservados.
 """
 
 import sys

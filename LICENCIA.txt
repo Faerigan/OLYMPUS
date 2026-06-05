@@ -1,0 +1,162 @@
+================================================================
+  CONTRATO DE LICENCIA DE USO DE SOFTWARE
+  ECLIPSE-T · Ecosistema OLYMPUS
+  © 2026 Dr. Nicolás Vargas · CESFAM Cerrillos de Tamaya
+================================================================
+
+IMPORTANTE: Lea atentamente este contrato antes de activar el
+software. Al hacer clic en "Acepto", usted declara haber leído,
+comprendido y aceptado todos los términos aquí establecidos.
+Este acto constituye un acuerdo electrónico válido conforme a
+la Ley 19.799 sobre Documentos Electrónicos.
+
+----------------------------------------------------------------
+ARTÍCULO 1 — NATURALEZA DEL SOFTWARE
+----------------------------------------------------------------
+
+ECLIPSE-T es una herramienta de redacción y transcripción
+asistida de uso clínico. El software genera borradores de texto
+en lenguaje natural a partir de la información ingresada por el
+profesional, los cuales pueden ser revisados, modificados y
+volcados a cualquier sistema de registro que el profesional
+determine.
+
+ECLIPSE-T NO constituye un sistema de ficha clínica, NO crea
+documentos con valor legal autónomo como documento médico, y NO
+emite diagnósticos ni recomendaciones terapéuticas. El software
+es equivalente funcional a un procesador de texto especializado.
+
+La responsabilidad por la validación del contenido clínico
+generado, su edición final y su destino recae íntegramente en
+el profesional de salud.
+
+----------------------------------------------------------------
+ARTÍCULO 2 — LICENCIA DE USO PERSONAL
+----------------------------------------------------------------
+
+El pago de la clave de activación otorga al usuario una licencia
+personal, intransferible y de carácter vitalicio para instalar
+y usar ECLIPSE-T en un (1) equipo de su propiedad o bajo su
+gestión directa, en el ejercicio de su práctica clínica.
+
+Queda expresamente prohibido:
+
+  a) Redistribuir, sublicenciar, vender o ceder la licencia o
+     la clave de activación a terceros.
+
+  b) Descompilar, desensamblar, hacer ingeniería inversa o
+     modificar el software de cualquier forma.
+
+  c) Usar el software en más de un equipo simultáneamente o
+     en equipos distintos al registrado con la clave de
+     activación, sin adquirir una licencia adicional.
+
+La licencia incluye actualizaciones de mantenimiento (corrección
+de errores) por dos (2) años desde la fecha de activación. Las
+actualizaciones de versión mayor podrán requerir una nueva
+licencia de activación.
+
+----------------------------------------------------------------
+ARTÍCULO 3 — PROPIEDAD DE LOS DATOS
+----------------------------------------------------------------
+
+Todos los datos ingresados al sistema son de titularidad
+exclusiva del usuario y/o de sus pacientes. El desarrollador
+no accede, almacena, transmite ni procesa datos clínicos en
+ningún momento.
+
+ECLIPSE-T opera completamente fuera de línea (offline) una vez
+instalado. El usuario es responsable del respaldo, custodia y
+eventual eliminación de los datos almacenados en su equipo,
+conforme a la normativa aplicable (Ley 21.096, Ley 20.584).
+
+----------------------------------------------------------------
+ARTÍCULO 4 — CREDENCIALES DE ACCESO A SISTEMAS EXTERNOS
+----------------------------------------------------------------
+
+El software puede automatizar, en nombre del usuario y bajo su
+instrucción explícita, el acceso a plataformas externas de
+laboratorio u otros sistemas clínicos (ej. IRIS, RedClínica u
+otros) mediante las credenciales provistas por el propio usuario.
+
+El usuario declara:
+
+  a) Ser titular autorizado de las credenciales que ingresa
+     al sistema.
+
+  b) Que el acceso automatizado a dichos sistemas mediante
+     ECLIPSE-T tiene idéntico alcance legal que si realizara
+     el acceso manualmente.
+
+  c) Asumir íntegra responsabilidad por cualquier acción
+     ejecutada en dichos sistemas mediante sus credenciales,
+     independientemente del medio técnico utilizado.
+
+El desarrollador no almacena, transmite ni accede en ningún
+momento a las credenciales del usuario. ECLIPSE-T actúa
+exclusivamente como un conjunto de instrucciones automatizadas
+que operan en el equipo local del usuario, bajo su control y
+responsabilidad directa.
+
+----------------------------------------------------------------
+ARTÍCULO 5 — EXCLUSIÓN DE GARANTÍAS Y LIMITACIÓN DE
+             RESPONSABILIDAD
+----------------------------------------------------------------
+
+El software se entrega en su estado actual ("tal como está",
+as-is), sin garantías expresas ni implícitas de ningún tipo.
+El desarrollador no garantiza que el software esté libre de
+errores o interrupciones, ni que sea apto para un uso clínico
+específico.
+
+En ningún caso la responsabilidad total del desarrollador
+excederá el monto pagado por la licencia de activación.
+El desarrollador no será responsable por daños directos,
+indirectos, incidentales, especiales o derivados del uso
+o la imposibilidad de uso del software.
+
+El uso del software no exime al profesional de salud de ninguna
+obligación legal, ética o deontológica propia de su ejercicio
+profesional. Las decisiones clínicas son responsabilidad
+exclusiva del profesional.
+
+----------------------------------------------------------------
+ARTÍCULO 6 — TERMINACIÓN
+----------------------------------------------------------------
+
+Esta licencia se revoca automáticamente, sin necesidad de
+notificación previa, si el usuario:
+
+  a) Redistribuye o cede la clave de activación a terceros.
+
+  b) Intenta descompilar, desensamblar o modificar el software.
+
+  c) Usa el software con fines distintos al ejercicio clínico
+     propio o en más equipos de los autorizados.
+
+Ante la terminación, el usuario deberá cesar todo uso del
+software y eliminar todas las copias instaladas.
+
+----------------------------------------------------------------
+ARTÍCULO 7 — MARCO LEGAL APLICABLE
+----------------------------------------------------------------
+
+Este contrato se rige por las leyes de la República de Chile.
+
+Marco normativo aplicable:
+  · Ley 17.336 — Propiedad Intelectual
+  · Ley 19.799 — Documentos Electrónicos y Firma Electrónica
+  · Ley 21.096 — Protección de Datos Personales
+  · Ley 20.584 — Derechos y Deberes del Paciente
+
+La aceptación electrónica mediante el botón "Acepto" constituye
+un acuerdo válido conforme a la Ley 19.799. Se deja constancia
+de la fecha y equipo de activación en los registros del sistema.
+
+Para consultas o soporte:
+  Dr. Nicolás Vargas · n.vargas.med@gmail.com
+
+================================================================
+  Versión de licencia: 1.0 · ECLIPSE-T v3.0
+  © 2026 Dr. Nicolás Vargas · CESFAM Cerrillos de Tamaya
+================================================================

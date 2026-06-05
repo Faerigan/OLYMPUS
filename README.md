@@ -11,8 +11,75 @@
 |--------|-----|--------|
 | **ECLIPSE-T** | Aplicación principal de registros clínicos | v3.0 estable |
 | **HERMES** | Transcripción de voz offline (Whisper) | v3.0 estable |
-| **HELIOS** | Historial de laboratorio desde IRIS | v1.0 estable |
-| **HEFESTOS** | Instalador con asistente visual | v1.0 estable |
+| **HELIOS** | Historial de laboratorio desde IRIS / RedClínica | v1.0 estable |
+| **HEFESTOS** | Instalador con asistente visual | v2.0 estable |
+
+---
+
+## Instalación rápida
+
+1. Copie `ECLIPSE-T.exe`, `helios.exe` y `HEFESTOS.exe` a una carpeta local (p. ej. `C:\Users\<usuario>\Desktop\APPS ECICEP`).
+2. Ejecute `HEFESTOS.exe`.
+3. Ingrese la carpeta y el código de activación.
+4. HEFESTOS descarga automáticamente el modelo de voz HERMES y geckodriver.
+5. Al finalizar acepte los Términos y Condiciones y haga clic en **Abrir ECLIPSE-T**.
+
+> **Sin Python requerido** en el equipo destino para usar los `.exe`.
+
+---
+
+## Requisitos previos (solo si ejecuta desde código fuente `.py`)
+
+Si en lugar de los ejecutables está corriendo directamente los archivos `.py`,
+necesitará Python instalado previamente. Puede instalarlo con **winget**
+(viene preinstalado en Windows 10 v1809+ y Windows 11):
+
+```
+winget install Python.Python.3.11
+```
+
+Luego instale las dependencias:
+
+```
+pip install openai-whisper sounddevice rapidfuzz cryptography selenium pypdf pillow
+```
+
+> Los ejecutables `.exe` ya incluyen todas estas dependencias, no es necesario pip.
+
+---
+
+## Firefox — requerido para HELIOS
+
+HELIOS usa Selenium + Firefox para acceder a los sistemas de laboratorio (IRIS, RedClínica).
+
+**HEFESTOS intenta instalar Firefox automáticamente** con winget. Si falla:
+
+```
+winget install Mozilla.Firefox
+```
+
+O descárguelo manualmente desde **mozilla.org**.
+
+> Si Firefox no está instalado, ECLIPSE-T funciona normalmente pero HELIOS no puede
+> consultar el laboratorio.
+
+---
+
+## Modelo de voz HERMES (base.pt)
+
+HERMES requiere el modelo Whisper `base.pt` (~139 MB) en la carpeta `modelos/`
+dentro del directorio de ECLIPSE-T. HEFESTOS lo descarga automáticamente.
+
+Si la descarga falla, puede obtenerlo manualmente:
+
+```
+python -c "import whisper; whisper.load_model('base', download_root='<ruta_eclipse>/modelos/')"
+```
+
+O descárguelo directamente desde:
+`https://openaipublic.azureedge.net/main/whisper/models/ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f668f8b0e6c6326e34e/base.pt`
+
+Guárdelo como `<directorio_eclipse>/modelos/base.pt`.
 
 ---
 
@@ -45,7 +112,8 @@ Actualizaciones al catálogo CIE-10 local de ECLIPSE-T.
 
 **HEFESTOS** lee `hefestos/install_manifest.json` para:
 - Instalar todos los componentes en el orden correcto
-- Descargar los modelos Whisper y geckodriver
+- Descargar el modelo Whisper (`base.pt`) y geckodriver
+- Instalar Firefox si no está presente (via winget)
 
 ---
 

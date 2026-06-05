@@ -1,6 +1,7 @@
 """
 hefestos.py — Instalador ECLIPSE-T v3.0  ·  HEFESTOS v2.0
 Ecosistema OLYMPUS · CESFAM Cerrillos de Tamaya
+© 2026 Dr. Nicolás Vargas · CESFAM Cerrillos de Tamaya · Todos los derechos reservados.
 """
 
 import hashlib
@@ -53,10 +54,29 @@ _ECLIPSE_REPO = "Faerigan/eclipse-t"   # repo privado — releases con los EXEs
 
 
 def _cargar_github_token() -> str:
-    """Intenta importar el token de hefestos_key_validator (archivo privado)."""
+    """
+    Carga el token GitHub para el repo OLYMPUS.
+    Orden de búsqueda:
+      1. D:/ECLIPSE/.tokens  (JSON con clave "olympus")
+      2. hefestos_key_validator._GITHUB_TOKEN  (token embebido en el exe)
+    """
+    # 1. Intentar desde .tokens (permite rotación sin recompilar)
+    for tokens_path in (
+        Path("D:/ECLIPSE/.tokens"),
+        Path("E:/ECLIPSE/.tokens"),
+        _BASE_DIR.parent / "ECLIPSE" / ".tokens",
+    ):
+        try:
+            if tokens_path.exists():
+                import json as _json
+                tok = _json.loads(tokens_path.read_text("utf-8")).get("olympus", "")
+                if tok:
+                    return tok
+        except Exception:
+            pass
+    # 2. Fallback: token embebido en hefestos_key_validator
     try:
         import importlib, sys as _sys
-        # Buscar en el directorio de HEFESTOS
         _sys.path.insert(0, str(_BASE_DIR))
         mod = importlib.import_module("hefestos_key_validator")
         return getattr(mod, "_GITHUB_TOKEN", "") or ""
@@ -390,6 +410,282 @@ class HefestosAnimacion(tk.Canvas):
         self.create_polygon(*sum(zip(vx, vy), ()), fill=METAL, outline="#E8E8E8", width=1)
 
 
+# ── Texto de licencia embebido ───────────────────────────────────────────────
+
+_TEXTO_LICENCIA = """\
+================================================================
+  CONTRATO DE LICENCIA DE USO DE SOFTWARE
+  ECLIPSE-T · Ecosistema OLYMPUS
+  © 2026 Dr. Nicolás Vargas · CESFAM Cerrillos de Tamaya
+================================================================
+
+IMPORTANTE: Lea atentamente este contrato antes de activar el
+software. Al hacer clic en "Acepto", usted declara haber leído,
+comprendido y aceptado todos los términos aquí establecidos.
+Este acto constituye un acuerdo electrónico válido conforme a
+la Ley 19.799 sobre Documentos Electrónicos.
+
+----------------------------------------------------------------
+ARTÍCULO 1 — NATURALEZA DEL SOFTWARE
+----------------------------------------------------------------
+
+ECLIPSE-T es una herramienta de redacción y transcripción
+asistida de uso clínico. El software genera borradores de texto
+en lenguaje natural a partir de la información ingresada por el
+profesional, los cuales pueden ser revisados, modificados y
+volcados a cualquier sistema de registro que el profesional
+determine.
+
+ECLIPSE-T NO constituye un sistema de ficha clínica, NO crea
+documentos con valor legal autónomo como documento médico, y NO
+emite diagnósticos ni recomendaciones terapéuticas. El software
+es equivalente funcional a un procesador de texto especializado.
+
+La responsabilidad por la validación del contenido clínico
+generado, su edición final y su destino recae íntegramente en
+el profesional de salud.
+
+----------------------------------------------------------------
+ARTÍCULO 2 — LICENCIA DE USO PERSONAL
+----------------------------------------------------------------
+
+El pago de la clave de activación otorga al usuario una licencia
+personal, intransferible y de carácter vitalicio para instalar
+y usar ECLIPSE-T en un (1) equipo de su propiedad o bajo su
+gestión directa, en el ejercicio de su práctica clínica.
+
+Queda expresamente prohibido:
+
+  a) Redistribuir, sublicenciar, vender o ceder la licencia o
+     la clave de activación a terceros.
+
+  b) Descompilar, desensamblar, hacer ingeniería inversa o
+     modificar el software de cualquier forma.
+
+  c) Usar el software en más de un equipo simultáneamente o en
+     equipos distintos al registrado con la clave de activación,
+     sin adquirir una licencia adicional.
+
+La licencia incluye actualizaciones de mantenimiento por dos (2)
+años desde la fecha de activación. Las actualizaciones de versión
+mayor podrán requerir una nueva licencia de activación.
+
+----------------------------------------------------------------
+ARTÍCULO 3 — PROPIEDAD DE LOS DATOS
+----------------------------------------------------------------
+
+Todos los datos ingresados al sistema son de titularidad
+exclusiva del usuario y/o de sus pacientes. El desarrollador
+no accede, almacena, transmite ni procesa datos clínicos en
+ningún momento.
+
+ECLIPSE-T opera completamente fuera de línea (offline) una vez
+instalado. El usuario es responsable del respaldo, custodia y
+eventual eliminación de los datos almacenados en su equipo,
+conforme a la normativa aplicable (Ley 21.096, Ley 20.584).
+
+----------------------------------------------------------------
+ARTÍCULO 4 — CREDENCIALES DE ACCESO A SISTEMAS EXTERNOS
+----------------------------------------------------------------
+
+El software puede automatizar, en nombre del usuario y bajo su
+instrucción explícita, el acceso a plataformas externas de
+laboratorio u otros sistemas clínicos (ej. IRIS, RedClínica u
+otros) mediante las credenciales provistas por el propio usuario.
+
+El usuario declara:
+
+  a) Ser titular autorizado de las credenciales que ingresa
+     al sistema.
+
+  b) Que el acceso automatizado a dichos sistemas mediante
+     ECLIPSE-T tiene idéntico alcance legal que si realizara
+     el acceso manualmente.
+
+  c) Asumir íntegra responsabilidad por cualquier acción
+     ejecutada en dichos sistemas mediante sus credenciales,
+     independientemente del medio técnico utilizado.
+
+El desarrollador no almacena, transmite ni accede en ningún
+momento a las credenciales del usuario. ECLIPSE-T actúa
+exclusivamente como un conjunto de instrucciones automatizadas
+que operan en el equipo local del usuario, bajo su control y
+responsabilidad directa.
+
+----------------------------------------------------------------
+ARTÍCULO 5 — EXCLUSIÓN DE GARANTÍAS Y LIMITACIÓN DE
+             RESPONSABILIDAD
+----------------------------------------------------------------
+
+El software se entrega en su estado actual ("tal como está",
+as-is), sin garantías expresas ni implícitas de ningún tipo.
+El desarrollador no garantiza que el software esté libre de
+errores o interrupciones, ni que sea apto para un uso clínico
+específico.
+
+En ningún caso la responsabilidad total del desarrollador
+excederá el monto pagado por la licencia de activación.
+El desarrollador no será responsable por daños directos,
+indirectos, incidentales, especiales o derivados del uso o
+la imposibilidad de uso del software.
+
+El uso del software no exime al profesional de salud de ninguna
+obligación legal, ética o deontológica propia de su ejercicio
+profesional. Las decisiones clínicas son responsabilidad
+exclusiva del profesional.
+
+----------------------------------------------------------------
+ARTÍCULO 6 — TERMINACIÓN
+----------------------------------------------------------------
+
+Esta licencia se revoca automáticamente, sin necesidad de
+notificación previa, si el usuario redistribuye la clave de
+activación, intenta descompilar o modificar el software, o lo
+usa con fines distintos al ejercicio clínico propio o en más
+equipos de los autorizados.
+
+Ante la terminación, el usuario deberá cesar todo uso del
+software y eliminar todas las copias instaladas.
+
+----------------------------------------------------------------
+ARTÍCULO 7 — MARCO LEGAL APLICABLE
+----------------------------------------------------------------
+
+Este contrato se rige por las leyes de la República de Chile.
+
+Marco normativo aplicable:
+  · Ley 17.336 — Propiedad Intelectual
+  · Ley 19.799 — Documentos Electrónicos y Firma Electrónica
+  · Ley 21.096 — Protección de Datos Personales
+  · Ley 20.584 — Derechos y Deberes del Paciente
+
+La aceptación electrónica mediante el botón "Acepto" constituye
+un acuerdo válido conforme a la Ley 19.799. Se deja constancia
+de la fecha y equipo de activación en los registros del sistema.
+
+Para consultas o soporte:  n.vargas.med@gmail.com
+
+================================================================
+  Versión de licencia: 1.0 · ECLIPSE-T v3.0
+  © 2026 Dr. Nicolás Vargas · CESFAM Cerrillos de Tamaya
+================================================================
+"""
+
+
+# ── Diálogo Licencia ─────────────────────────────────────────────────────────
+
+class _DialogoLicencia(tk.Toplevel):
+    """
+    Ventana modal con el texto completo de la licencia.
+    El botón "Acepto" solo se habilita cuando el usuario marca el checkbox.
+    on_acepto y on_rechazo son callbacks sin argumentos.
+    """
+
+    def __init__(self, parent, on_acepto, on_rechazo):
+        super().__init__(parent)
+        self._on_acepto   = on_acepto
+        self._on_rechazo  = on_rechazo
+
+        self.title("Términos y Condiciones de Uso — ECLIPSE-T")
+        self.resizable(True, True)
+        self.configure(bg=BG)
+        self.grab_set()
+        self.protocol("WM_DELETE_WINDOW", self._rechazar)
+
+        self._construir()
+        self.geometry("660x560")
+        self.update_idletasks()
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+        w, h = self.winfo_width(), self.winfo_height()
+        self.geometry(f"+{(sw - w) // 2}+{(sh - h) // 2}")
+        self.lift()
+        self.focus_force()
+
+    def _construir(self):
+        # Encabezado
+        hdr = tk.Frame(self, bg=DARK, pady=6)
+        hdr.pack(fill="x")
+        tk.Label(hdr,
+                 text="Contrato de Licencia de Uso de Software",
+                 font=("Georgia", 11, "bold"), fg=TEXT, bg=DARK
+                 ).pack()
+        tk.Label(hdr,
+                 text="Lea atentamente antes de activar ECLIPSE-T",
+                 font=("Georgia", 9, "italic"), fg=DIM, bg=DARK
+                 ).pack()
+
+        # Área de texto con scroll
+        frame_txt = tk.Frame(self, bg=BG, padx=12, pady=8)
+        frame_txt.pack(fill="both", expand=True)
+
+        scrollbar = tk.Scrollbar(frame_txt)
+        scrollbar.pack(side="right", fill="y")
+
+        txt = tk.Text(frame_txt,
+                      wrap="word",
+                      font=("Consolas", 9),
+                      fg=TEXT, bg="#FFFEF8",
+                      relief="flat", bd=1,
+                      yscrollcommand=scrollbar.set,
+                      state="normal",
+                      cursor="arrow")
+        txt.insert("1.0", _TEXTO_LICENCIA)
+        txt.configure(state="disabled")
+        txt.pack(fill="both", expand=True)
+        scrollbar.config(command=txt.yview)
+
+        # Separador
+        tk.Frame(self, bg=DARK, height=1).pack(fill="x", padx=16)
+
+        # Pie: checkbox + botones
+        pie = tk.Frame(self, bg=BG, padx=16, pady=10)
+        pie.pack(fill="x")
+
+        self._var_acepto = tk.BooleanVar(value=False)
+        chk = tk.Checkbutton(pie,
+                             text="He leído y acepto los términos y condiciones",
+                             variable=self._var_acepto,
+                             font=("Georgia", 10), fg=TEXT, bg=BG,
+                             activebackground=BG,
+                             command=self._toggle_boton)
+        chk.pack(anchor="w", pady=(0, 8))
+
+        btns = tk.Frame(pie, bg=BG)
+        btns.pack(fill="x")
+
+        self._btn_acepto = tk.Button(btns,
+                                     text="  Acepto  ✓  ",
+                                     font=("Georgia", 11, "bold"),
+                                     bg=GREEN, fg="white", relief="flat",
+                                     padx=16, pady=6,
+                                     state="disabled",
+                                     activebackground="#1B5E20",
+                                     command=self._aceptar)
+        self._btn_acepto.pack(side="left", padx=(0, 12))
+
+        tk.Button(btns,
+                  text="No acepto — Salir",
+                  font=("Georgia", 10), bg=DARK, fg=TEXT,
+                  relief="flat", padx=12, pady=6,
+                  command=self._rechazar
+                  ).pack(side="left")
+
+    def _toggle_boton(self):
+        estado = "normal" if self._var_acepto.get() else "disabled"
+        self._btn_acepto.configure(state=estado)
+
+    def _aceptar(self):
+        self.grab_release()
+        self.destroy()
+        self._on_acepto()
+
+    def _rechazar(self):
+        self.grab_release()
+        self.destroy()
+        self._on_rechazo()
+
+
 # ── Aplicación principal ─────────────────────────────────────────────────────
 
 class HefestosApp:
@@ -399,6 +695,20 @@ class HefestosApp:
         Path("D:/ECLIPSE"),
         Path("C:/ECLIPSE"),
     ]
+
+    @staticmethod
+    def _candidatos_desktop() -> list:
+        """Devuelve subcarpetas del Desktop del usuario actual como candidatos."""
+        candidatos = []
+        try:
+            desktop = Path.home() / "Desktop"
+            if desktop.exists():
+                for sub in sorted(desktop.iterdir()):
+                    if sub.is_dir():
+                        candidatos.append(sub)
+        except Exception:
+            pass
+        return candidatos
 
     def __init__(self):
         self.root = tk.Tk()
@@ -560,7 +870,8 @@ class HefestosApp:
                  font=("Georgia", 8), fg=GRAY, bg=BG).pack()
 
     def _detectar_eclipse(self):
-        for p in self._ECLIPSE_CANDIDATOS:
+        candidatos = list(self._ECLIPSE_CANDIDATOS) + self._candidatos_desktop()
+        for p in candidatos:
             if p.exists() and (
                 (p / "ECLIPSE-T.exe").exists() or
                 (p / "eclipse_t_v3.py").exists() or
@@ -1158,14 +1469,13 @@ class HefestosApp:
         """Devuelve la ruta absoluta donde se instalará un asset github_release."""
         if not self._eclipse_dir:
             return None
-        if dest_key == "eclipse_dir":
+        if dest_key in ("eclipse_dir", "helios_dir"):
+            # Ambos ejecutables van en el mismo directorio que ECLIPSE-T.exe
             return self._eclipse_dir / asset
-        if dest_key == "helios_dir":
-            return self._eclipse_dir.parent / "HELIOS" / asset
         return _BASE_DIR / asset
 
     def _ejecutar_instalacion(self):
-        # ── Pre-check: estado de ejecutables antes de empezar ────────────────
+        # ── Pre-check: estado de ejecutables y modelos antes de empezar ─────
         self._emit(tipo="log", texto="── Verificación previa ──────────────────")
         for grupo in self._manifest["grupos"]:
             for paso in grupo["pasos"]:
@@ -1180,6 +1490,16 @@ class HefestosApp:
                     else:
                         self._emit(tipo="log",
                                     texto=f"  ↓ {paso['asset']}  —  no encontrado, se descargará")
+                elif paso["tipo"] == "descarga" and self._eclipse_dir:
+                    destino = self._eclipse_dir / paso["destino"]
+                    min_bytes = int(paso.get("mb", 0) * 1024 * 1024 * 0.5)
+                    if destino.exists() and destino.stat().st_size > max(4096, min_bytes):
+                        mb = destino.stat().st_size / (1024 * 1024)
+                        self._emit(tipo="log",
+                                    texto=f"  ✓ {paso['destino']}  —  ya presente ({mb:.0f} MB), se omite descarga")
+                    else:
+                        self._emit(tipo="log",
+                                    texto=f"  ↓ {paso['destino']}  —  no encontrado, se descargará")
         self._emit(tipo="log", texto="─────────────────────────────────────────")
 
         # ── Ejecución del manifest ────────────────────────────────────────────
@@ -1230,9 +1550,17 @@ class HefestosApp:
             return self._descargar_modelo_whisper(paso["modelo"], paso.get("mb", "?"))
 
         if tipo == "descarga":
-            url     = f"{OLYMPUS_RAW}/{paso['url']}"
+            # Soporta url_completa (URL directa) o url relativa a OLYMPUS_RAW
+            url     = paso.get("url_completa") or f"{OLYMPUS_RAW}/{paso['url']}"
             destino = self._eclipse_dir / paso["destino"]  # type: ignore
-            return self._descargar_archivo(url, destino, paso["url"])
+            # Pre-check: si el archivo ya existe con tamaño razonable, omitir descarga
+            min_bytes = int(paso.get("mb", 0) * 1024 * 1024 * 0.5)
+            if destino.exists() and destino.stat().st_size > max(4096, min_bytes):
+                mb_local = destino.stat().st_size / (1024 * 1024)
+                self._emit(tipo="log",
+                            texto=f"{paso['destino']} ya presente ({mb_local:.0f} MB) — omitiendo descarga")
+                return True  # Mostrar ✓ verde
+            return self._descargar_archivo(url, destino, paso.get("url", paso["destino"]))
 
         if tipo == "verificar_app":
             return self._verificar_app(paso.get("app", ""))
@@ -1250,12 +1578,9 @@ class HefestosApp:
             asset    = paso["asset"]
             dest_key = paso.get("destino", "eclipse_dir")
             mb_est   = paso.get("mb", "?")
-            if dest_key == "eclipse_dir":
+            # Todos los ejecutables van en el mismo directorio que ECLIPSE-T.exe
+            if dest_key in ("eclipse_dir", "helios_dir"):
                 destino = self._eclipse_dir / asset          # type: ignore
-            elif dest_key == "helios_dir":
-                helios_dir = self._eclipse_dir.parent / "HELIOS"  # type: ignore
-                helios_dir.mkdir(exist_ok=True)
-                destino = helios_dir / asset
             else:
                 destino = _BASE_DIR / asset
             return self._descargar_release_github(asset, destino, mb_est)
@@ -1298,7 +1623,9 @@ class HefestosApp:
         return result.returncode == 0
 
     def _descargar_modelo_whisper(self, modelo: str, mb) -> bool:
-        modelos_dir = _BASE_DIR / "modelos"
+        # Guardar el modelo en <eclipse_dir>/modelos/ para que hermes_voice.py lo encuentre
+        eclipse = getattr(self, "_eclipse_dir", _BASE_DIR)
+        modelos_dir = eclipse / "modelos"
         modelos_dir.mkdir(exist_ok=True)
         self._emit(tipo="log",
                     texto=f"Descargando modelo Whisper {modelo} ({mb} MB)…")
@@ -1329,8 +1656,8 @@ class HefestosApp:
         # ── 1. Verificar si ya existe ────────────────────────────────────────
         if destino.exists() and destino.stat().st_size > 1_048_576:
             self._emit(tipo="log",
-                        texto=f"{asset_name} ya presente ({destino.stat().st_size // (1024*1024)} MB) — omitiendo")
-            return "skip"
+                        texto=f"{asset_name} ya presente ({destino.stat().st_size // (1024*1024)} MB) — omitiendo descarga")
+            return True  # Mostrar ✓ verde, no – gris
 
         # ── 2. Token ─────────────────────────────────────────────────────────
         token = _cargar_github_token()
@@ -1424,16 +1751,42 @@ class HefestosApp:
             return False
 
     def _descargar_archivo(self, url: str, destino: Path, nombre: str) -> bool:
+        """Descarga en streaming para soportar archivos grandes sin timeout de socket."""
+        CHUNK    = 1024 * 1024      # 1 MB por lectura
+        LOG_CADA = 30 * 1024 * 1024 # log cada 30 MB
         try:
             destino.parent.mkdir(parents=True, exist_ok=True)
-            with urllib.request.urlopen(url, timeout=20) as r:
-                data = r.read()
-            destino.write_bytes(data)
+            req = urllib.request.Request(url, headers={"User-Agent": "HEFESTOS-installer/2.0"})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                total = int(r.headers.get("Content-Length", 0))
+                total_mb = total / (1024 * 1024) if total else 0
+                if total_mb > 1:
+                    self._emit(tipo="log",
+                                texto=f"Descargando {nombre} ({total_mb:.0f} MB)…")
+                descargado  = 0
+                siguiente_log = LOG_CADA
+                with open(destino, "wb") as fh:
+                    while True:
+                        chunk = r.read(CHUNK)
+                        if not chunk:
+                            break
+                        fh.write(chunk)
+                        descargado += len(chunk)
+                        if total and descargado >= siguiente_log:
+                            pct = int(descargado / total * 100)
+                            self._emit(tipo="log",
+                                        texto=f"  {descargado//(1024*1024)} / {total_mb:.0f} MB  ({pct}%)")
+                            siguiente_log += LOG_CADA
+            final_mb = destino.stat().st_size / (1024 * 1024)
             self._emit(tipo="log",
-                        texto=f"{nombre} descargado ({len(data):,} bytes)")
+                        texto=f"✓ {nombre} descargado ({final_mb:.1f} MB)")
             return True
         except Exception as exc:
             self._emit(tipo="log", texto=f"Error descargando {nombre}: {exc}")
+            try:
+                destino.unlink(missing_ok=True)
+            except Exception:
+                pass
             return False
 
     def _verificar_app(self, app: str) -> bool:
@@ -1446,9 +1799,39 @@ class HefestosApp:
                 if p.exists():
                     encontrado = True
                     break
-        estado = "encontrado" if encontrado else "NO encontrado (HELIOS no disponible)"
-        self._emit(tipo="log", texto=f"{app}: {estado}")
-        return True
+
+        if encontrado:
+            self._emit(tipo="log", texto=f"{app}: encontrado")
+            return True
+
+        # Intentar instalar automáticamente con winget (Windows 10/11)
+        self._emit(tipo="log",
+                    texto=f"{app}: no encontrado — intentando instalar con winget…")
+        winget = shutil.which("winget")
+        if winget:
+            try:
+                result = subprocess.run(
+                    [winget, "install", "--id", "Mozilla.Firefox",
+                     "--silent", "--accept-package-agreements",
+                     "--accept-source-agreements", "--disable-interactivity"],
+                    capture_output=True, text=True, timeout=300,
+                )
+                salida = (result.stdout + result.stderr).lower()
+                for linea in (result.stdout + result.stderr).strip().splitlines()[-5:]:
+                    self._emit(tipo="log", texto=linea)
+                if result.returncode == 0 or "already installed" in salida:
+                    self._emit(tipo="log", texto="Firefox instalado via winget")
+                else:
+                    self._emit(tipo="log",
+                                texto="winget no pudo instalar Firefox — instálelo manualmente desde mozilla.org")
+            except subprocess.TimeoutExpired:
+                self._emit(tipo="log", texto="Timeout instalando Firefox — continúe manualmente")
+            except Exception as exc:
+                self._emit(tipo="log", texto=f"winget error: {exc}")
+        else:
+            self._emit(tipo="log",
+                        texto="winget no disponible — instale Firefox manualmente desde mozilla.org")
+        return True  # No bloquear instalación aunque Firefox falte
 
     def _instalar_geckodriver(self) -> bool:
         VERSION = "v0.35.0"
@@ -1519,7 +1902,14 @@ class HefestosApp:
         cv_logo = tk.Canvas(fr, width=140, height=140, bg=ANIM_BG,
                              highlightthickness=2, highlightbackground=GOLD)
         cv_logo.pack(pady=(0, 4))
-        dibujar_logo(cv_logo, 70, 70, s=0.72)
+        try:
+            from PIL import Image, ImageTk
+            _img = Image.open(resource_path(os.path.join("Resources", "HEFESTOS.png")))
+            _img = _img.resize((136, 136), Image.LANCZOS)
+            self._logo_final = ImageTk.PhotoImage(_img)
+            cv_logo.create_image(70, 70, image=self._logo_final, anchor="center")
+        except Exception:
+            dibujar_logo(cv_logo, 70, 70, s=0.72)
 
         tk.Label(fr, text="Instalación completada",
                  font=("Georgia", 17, "bold"), fg=GREEN, bg=BG).pack(pady=(14, 4))
@@ -1530,11 +1920,13 @@ class HefestosApp:
                  font=("Georgia", 10), fg=TEXT, bg=BG, justify="center",
                  ).pack(pady=(0, 16))
 
-        tk.Button(fr, text="  Abrir ECLIPSE-T  ▶  ",
+        self._btn_abrir = tk.Button(fr, text="  Abrir ECLIPSE-T  ▶  ",
                   font=("Georgia", 13, "bold"),
                   bg=ACCENT, fg="white", relief="flat", padx=18, pady=9,
+                  state="disabled",
                   activebackground="#A87018",
-                  command=self._abrir_eclipse).pack(pady=(0, 8))
+                  command=self._abrir_eclipse)
+        self._btn_abrir.pack(pady=(0, 8))
 
         # Aviso Firefox / HELIOS
         aviso = tk.Frame(fr, bg=BG2, relief="groove", bd=1)
@@ -1552,22 +1944,6 @@ class HefestosApp:
                   command=lambda: __import__("webbrowser").open(
                       "https://www.mozilla.org/firefox/")).pack(anchor="w", padx=8, pady=(4, 6))
 
-        tk.Frame(fr, height=1, bg=DARK).pack(fill="x", padx=80, pady=(10, 6))
-
-        # Rebuild EXE
-        tk.Label(fr, text="Opcional: compilar ECLIPSE-T.exe (~26 min)",
-                 font=("Georgia", 9), fg=DIM, bg=BG).pack()
-        self._btn_rebuild = tk.Button(
-            fr, text="Compilar ECLIPSE-T.exe",
-            font=("Georgia", 10), bg=BG2, fg=GOLD,
-            relief="flat", padx=14, pady=5,
-            command=self._iniciar_rebuild)
-        self._btn_rebuild.pack(pady=(4, 4))
-        self._lbl_rebuild_estado = tk.Label(fr, text="",
-                                             font=("Georgia", 9, "italic"),
-                                             fg=GOLD, bg=BG)
-        self._lbl_rebuild_estado.pack()
-
         tk.Button(fr, text="Cerrar",
                   font=("Georgia", 10), bg=DARK, fg=TEXT,
                   relief="flat", padx=16, pady=6,
@@ -1575,24 +1951,14 @@ class HefestosApp:
 
     def _mostrar_final(self):
         self._mostrar(self._f_final)
-        self.root.after(800, self._sugerir_tc)
+        self.root.after(800, self._exigir_tc)
 
-    def _sugerir_tc(self):
-        respuesta = messagebox.askyesno(
-            "Términos y Condiciones",
-            "El uso de este software mediante una clave de activación implica\n"
-            "la aceptación de los Términos y Condiciones del ecosistema OLYMPUS.\n\n"
-            "¿Desea revisarlos ahora?",
-            parent=self.root
+    def _exigir_tc(self):
+        _DialogoLicencia(
+            self.root,
+            on_acepto=lambda: self._btn_abrir.configure(state="normal"),
+            on_rechazo=lambda: os._exit(0),
         )
-        if respuesta:
-            messagebox.showinfo(
-                "Términos y Condiciones",
-                "Los Términos y Condiciones de uso se encuentran en preparación.\n\n"
-                "Para consultas o más información, contacte al desarrollador:\n"
-                "n.vargas.med@gmail.com",
-                parent=self.root
-            )
 
     def _abrir_eclipse(self):
         if not self._eclipse_dir:
@@ -1617,48 +1983,6 @@ class HefestosApp:
             "No encontrado",
             f"No se encontró ECLIPSE-T.exe en {self._eclipse_dir}",
         )
-
-    # ── Rebuild EXE ──────────────────────────────────────────────────────────
-
-    def _iniciar_rebuild(self):
-        if not self._eclipse_dir:
-            return
-        build_py = self._eclipse_dir / "build.py"
-        if not build_py.exists():
-            messagebox.showerror("Error", f"build.py no encontrado en {self._eclipse_dir}")
-            return
-        self._btn_rebuild.config(state="disabled", text="Compilando…")
-        self._lbl_rebuild_estado.config(
-            text="Compilando ECLIPSE-T.exe (~26 min) — no cerrar la ventana", fg=GOLD)
-        threading.Thread(target=self._correr_rebuild, args=(build_py,),
-                         daemon=True).start()
-
-    def _correr_rebuild(self, build_py: Path):
-        try:
-            result = subprocess.run(
-                [sys.executable, str(build_py)],
-                capture_output=True, text=True,
-                cwd=str(self._eclipse_dir),
-                timeout=2400,
-            )
-            if result.returncode == 0:
-                self.root.after(0, self._rebuild_ok)
-            else:
-                stderr = result.stderr[-400:] if result.stderr else ""
-                self.root.after(0, lambda: self._rebuild_error(stderr))
-        except subprocess.TimeoutExpired:
-            self.root.after(0, lambda: self._rebuild_error("Timeout (>40 min)"))
-        except Exception as exc:
-            self.root.after(0, lambda: self._rebuild_error(str(exc)))
-
-    def _rebuild_ok(self):
-        self._btn_rebuild.config(state="disabled", text="EXE compilado ✓", bg=GREEN, fg="white")
-        self._lbl_rebuild_estado.config(text="ECLIPSE-T.exe generado en dist/", fg=GREEN)
-
-    def _rebuild_error(self, msg: str):
-        self._btn_rebuild.config(state="normal", text="Reintentar compilación")
-        self._lbl_rebuild_estado.config(
-            text=f"Error en compilación: {msg[:80]}", fg=RED)
 
     # ── Run ──────────────────────────────────────────────────────────────────
 
