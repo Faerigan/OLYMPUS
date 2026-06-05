@@ -16,6 +16,13 @@
 
 ---
 
+## Documentación
+
+📄 **[Manual de Instalación ECLIPSE-T v3.0 (PDF)](https://github.com/Faerigan/eclipse-t/releases/download/v3.0/Manual.de.Instalacion.ECLIPSE-T.v3.0.pdf)**
+— Guía completa de instalación y uso con capturas de pantalla.
+
+---
+
 ## Instalación rápida
 
 1. Copie `ECLIPSE-T.exe`, `helios.exe` y `HEFESTOS.exe` a una carpeta local (p. ej. `C:\Users\<usuario>\Desktop\APPS ECICEP`).
