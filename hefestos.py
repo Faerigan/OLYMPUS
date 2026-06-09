@@ -731,6 +731,7 @@ class HefestosApp:
         self._labels_pasos:         list        = []
         self._es_maestra:           bool        = False
         self._modo_agregar_centro:  bool        = False
+        self._forzar_nuevo_install: bool        = False
         self._cfg:                  dict        = {}
 
         self._var_dir   = tk.StringVar()
@@ -840,34 +841,137 @@ class HefestosApp:
         tk.Label(fr, text="Directorio ECLIPSE-T:", font=("Georgia", 10, "bold"),
                  fg=TEXT, bg=BG).pack(anchor="w", padx=60)
         row_dir = tk.Frame(fr, bg=BG)
-        row_dir.pack(fill="x", padx=60, pady=(4, 10))
+        row_dir.pack(fill="x", padx=60, pady=(4, 6))
         tk.Entry(row_dir, textvariable=self._var_dir, bg=BG2, fg=TEXT,
                  insertbackground=GOLD, relief="flat",
                  font=("Courier", 10), width=34).pack(side="left", ipady=5, padx=(0, 6))
         tk.Button(row_dir, text="…", bg=DARK, fg=TEXT, relief="flat",
                   command=self._seleccionar_dir).pack(side="left")
+        self._var_dir.trace_add("write", lambda *_: self._actualizar_modo_inicio())
 
-        # Código de instalación
-        tk.Label(fr, text="Código de instalación:", font=("Georgia", 10, "bold"),
-                 fg=TEXT, bg=BG).pack(anchor="w", padx=60)
-        entry = tk.Entry(fr, textvariable=self._var_clave, show="•",
+        # ── Frame A: primera instalación (clave nueva requerida) ─────────────
+        self._f_nuevo = tk.Frame(fr, bg=BG)
+
+        tk.Label(self._f_nuevo, text="Código de instalación:",
+                 font=("Georgia", 10, "bold"), fg=TEXT, bg=BG).pack(anchor="w", padx=60)
+        entry = tk.Entry(self._f_nuevo, textvariable=self._var_clave, show="•",
                          bg=BG2, fg=TEXT, insertbackground=GOLD,
                          relief="flat", font=("Courier", 13), width=26)
         entry.pack(ipady=6, pady=(4, 4))
         entry.bind("<Return>", lambda _: self._comenzar())
 
-        self._lbl_msg = tk.Label(fr, text="", font=("Georgia", 9),
+        self._lbl_msg = tk.Label(self._f_nuevo, text="", font=("Georgia", 9),
                                   fg=RED, bg=BG, wraplength=500, justify="center")
         self._lbl_msg.pack(pady=(2, 0))
 
-        tk.Button(fr, text="  INSTALAR  ▶  ",
+        tk.Button(self._f_nuevo, text="  INSTALAR  ▶  ",
                   font=("Georgia", 13, "bold"),
                   bg=ACCENT, fg="white", relief="flat", padx=18, pady=9,
                   activebackground="#A87018",
                   command=self._comenzar).pack(pady=(14, 4))
 
-        tk.Label(fr, text="Tiempo estimado con buena conexión: ~20 min",
+        tk.Label(self._f_nuevo, text="Tiempo estimado con buena conexión: ~20 min",
                  font=("Georgia", 8), fg=GRAY, bg=BG).pack()
+
+        tk.Frame(self._f_nuevo, height=1, bg=DARK).pack(fill="x", padx=80, pady=(14, 8))
+
+        tk.Button(self._f_nuevo, text="⚙  Reparar o desinstalar instalación existente",
+                  font=("Georgia", 9), fg=DIM, bg=BG,
+                  relief="flat", cursor="hand2", padx=4, pady=2,
+                  activeforeground=GOLD, activebackground=BG,
+                  command=self._cmd_mantenimiento).pack()
+
+        # ── Frame B: instalación ya configurada ──────────────────────────────
+        self._f_inicio_ok = tk.Frame(fr, bg=BG)
+
+        tk.Frame(self._f_inicio_ok, height=1, bg=GOLD).pack(fill="x", padx=60, pady=(4, 10))
+
+        tk.Label(self._f_inicio_ok,
+                 text="✓  ECLIPSE-T configurado",
+                 font=("Georgia", 11, "bold"), fg=GREEN, bg=BG).pack(pady=(0, 2))
+
+        self._lbl_centro_nombre_ok = tk.Label(
+            self._f_inicio_ok, text="",
+            font=("Georgia", 10, "italic"), fg=DIM, bg=BG
+        )
+        self._lbl_centro_nombre_ok.pack(pady=(0, 14))
+
+        btns_ok = tk.Frame(self._f_inicio_ok, bg=BG)
+        btns_ok.pack(pady=(0, 10))
+
+        tk.Button(btns_ok, text="  Reparar  🔧  ",
+                  font=("Georgia", 10, "bold"),
+                  bg=ACCENT, fg="white", relief="flat", padx=12, pady=7,
+                  activebackground="#A87018",
+                  command=self._cmd_reparar_directo).pack(side="left", padx=(0, 8))
+
+        tk.Button(btns_ok, text="  Desinstalar  ",
+                  font=("Georgia", 10),
+                  bg="#C62828", fg="white", relief="flat", padx=12, pady=7,
+                  activebackground="#9B1B1B",
+                  command=self._cmd_desinstalar).pack(side="left", padx=(0, 8))
+
+        tk.Button(btns_ok, text="  Cambiar de centro  ⇄  ",
+                  font=("Georgia", 10, "bold"),
+                  bg=GOLD, fg="white", relief="flat", padx=12, pady=7,
+                  activebackground="#8B6500",
+                  command=self._cmd_cambiar_centro).pack(side="left")
+
+    def _actualizar_modo_inicio(self):
+        """Muestra _f_nuevo (clave requerida) o _f_inicio_ok (ya configurado) según estado."""
+        if not hasattr(self, "_f_nuevo") or not hasattr(self, "_f_inicio_ok"):
+            return
+
+        if self._forzar_nuevo_install:
+            self._f_inicio_ok.pack_forget()
+            self._f_nuevo.pack(fill="x")
+            return
+
+        eclipse_dir_str = self._var_dir.get().strip()
+        if eclipse_dir_str:
+            centros_dat = Path(eclipse_dir_str) / "resources" / "centros.dat"
+            if centros_dat.exists():
+                # Leer nombre del centro activo para mostrarlo
+                try:
+                    self._eclipse_dir = Path(eclipse_dir_str)
+                    datos = self._cargar_centros_existentes()
+                    if datos:
+                        idx     = datos.get("activo", 0)
+                        centros = datos.get("centros", [])
+                        nombre  = (centros[idx].get("nombre_centro", "")
+                                   if centros and idx < len(centros) else "")
+                        self._lbl_centro_nombre_ok.config(text=nombre)
+                except Exception:
+                    self._lbl_centro_nombre_ok.config(text="")
+                self._f_nuevo.pack_forget()
+                self._f_inicio_ok.pack(fill="x")
+                return
+
+        self._f_inicio_ok.pack_forget()
+        self._f_nuevo.pack(fill="x")
+
+    def _cmd_reparar_directo(self):
+        """Inicia reparación directamente desde pantalla inicio (sin modal)."""
+        eclipse_dir_str = self._var_dir.get().strip()
+        if eclipse_dir_str:
+            self._eclipse_dir = Path(eclipse_dir_str)
+        if not self._eclipse_dir or not self._eclipse_dir.exists():
+            messagebox.showerror("Error", "Directorio ECLIPSE-T no encontrado.",
+                                 parent=self.root)
+            return
+        self._iniciar_instalacion()
+
+    def _cmd_cambiar_centro(self):
+        """Va a la pantalla de gestión de centros (reconfiguración)."""
+        eclipse_dir_str = self._var_dir.get().strip()
+        if eclipse_dir_str:
+            self._eclipse_dir = Path(eclipse_dir_str)
+        if not self._eclipse_dir or not self._eclipse_dir.exists():
+            messagebox.showerror("Error", "Directorio ECLIPSE-T no encontrado.",
+                                 parent=self.root)
+            return
+        self._poblar_reconfig()
+        self._mostrar(self._f_reconfig)
 
     def _detectar_eclipse(self):
         candidatos = list(self._ECLIPSE_CANDIDATOS) + self._candidatos_desktop()
@@ -881,6 +985,8 @@ class HefestosApp:
                 self._eclipse_dir = p
                 # Solo pre-rellena el directorio — la clave siempre valida primero
                 return
+        # Ningún directorio detectado — mostrar frame de nueva instalación
+        self._actualizar_modo_inicio()
 
     def _seleccionar_dir(self):
         d = filedialog.askdirectory(title="Seleccionar directorio ECLIPSE-T",
@@ -889,6 +995,7 @@ class HefestosApp:
             self._var_dir.set(d)
 
     def _comenzar(self):
+        self._forzar_nuevo_install = False
         eclipse_dir = Path(self._var_dir.get().strip())
         if not eclipse_dir.exists():
             self._lbl_msg.config(
@@ -1062,9 +1169,236 @@ class HefestosApp:
 
     def _cmd_agregar_nuevo_centro(self):
         self._modo_agregar_centro = True
+        self._forzar_nuevo_install = True
         self._var_clave.set("")
         self._lbl_msg.config(text="")
         self._mostrar(self._f_inicio)
+
+    # ── Mantenimiento (Reparar / Desinstalar) ────────────────────────────────
+
+    def _cmd_mantenimiento(self):
+        """Modal de mantenimiento accesible desde pantalla Inicio sin requerir clave."""
+        ed = self._eclipse_dir
+        if not ed:
+            # Intentar detectar de nuevo
+            self._detectar_eclipse()
+            ed = self._eclipse_dir
+        if not ed:
+            messagebox.showerror(
+                "Directorio no encontrado",
+                "No se detectó una instalación de ECLIPSE-T.\n"
+                "Seleccione el directorio en el campo 'Directorio ECLIPSE-T'.",
+                parent=self.root,
+            )
+            return
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title("HEFESTOS — Mantenimiento")
+        dlg.configure(bg=BG)
+        dlg.resizable(False, False)
+        dlg.grab_set()
+        dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
+
+        tk.Label(dlg, text="Mantenimiento de ECLIPSE-T",
+                 font=("Georgia", 14, "bold"), fg=GOLD, bg=BG).pack(pady=(16, 2))
+        tk.Label(dlg, text=str(ed),
+                 font=("Courier", 8), fg=DIM, bg=BG).pack()
+        tk.Frame(dlg, height=1, bg=DARK).pack(fill="x", padx=20, pady=10)
+
+        cuerpo = tk.Frame(dlg, bg=BG, padx=30)
+        cuerpo.pack(fill="x")
+
+        # — Reparar ──────────────────────────────────────────────────────────
+        bloque_rep = tk.Frame(cuerpo, bg=BG2, relief="groove", bd=1)
+        bloque_rep.pack(fill="x", pady=(0, 10))
+        tk.Label(bloque_rep, text="Reparar instalación",
+                 font=("Georgia", 11, "bold"), fg=TEXT, bg=BG2).pack(
+                     anchor="w", padx=12, pady=(10, 2))
+        tk.Label(bloque_rep,
+                 text="Vuelve a verificar y descarga los componentes faltantes.\n"
+                      "Los archivos ya presentes no se modifican.",
+                 font=("Georgia", 8), fg=DIM, bg=BG2, justify="left").pack(
+                     anchor="w", padx=12, pady=(0, 6))
+        tk.Button(bloque_rep, text="  Reparar instalación  ▶",
+                  font=("Georgia", 10, "bold"),
+                  bg=ACCENT, fg="white", relief="flat", padx=12, pady=6,
+                  activebackground="#A87018",
+                  command=lambda: [dlg.destroy(), self._iniciar_instalacion()]
+                  ).pack(anchor="w", padx=12, pady=(0, 10))
+
+        # — Desinstalar ──────────────────────────────────────────────────────
+        bloque_des = tk.Frame(cuerpo, bg="#FFF0F0", relief="groove", bd=1)
+        bloque_des.pack(fill="x", pady=(0, 10))
+        tk.Label(bloque_des, text="Desinstalar",
+                 font=("Georgia", 11, "bold"), fg=RED, bg="#FFF0F0").pack(
+                     anchor="w", padx=12, pady=(10, 2))
+        tk.Label(bloque_des,
+                 text="Elimina la configuración del centro y/o archivos del sistema.\n"
+                      "Seleccionará qué componentes borrar antes de confirmar.",
+                 font=("Georgia", 8), fg=DIM, bg="#FFF0F0", justify="left").pack(
+                     anchor="w", padx=12, pady=(0, 6))
+        tk.Button(bloque_des, text="  Desinstalar…",
+                  font=("Georgia", 10, "bold"),
+                  bg="#C62828", fg="white", relief="flat", padx=12, pady=6,
+                  activebackground="#9B1B1B",
+                  command=lambda: [dlg.destroy(), self._cmd_desinstalar()]
+                  ).pack(anchor="w", padx=12, pady=(0, 10))
+
+        tk.Button(dlg, text="Cancelar",
+                  font=("Georgia", 10), bg=DARK, fg=TEXT,
+                  relief="flat", padx=14, pady=6,
+                  command=dlg.destroy).pack(pady=(0, 14))
+
+        dlg.update_idletasks()
+        sw, sh = dlg.winfo_screenwidth(), dlg.winfo_screenheight()
+        w, h   = dlg.winfo_width(), dlg.winfo_height()
+        dlg.geometry(f"+{(sw-w)//2}+{(sh-h)//2}")
+
+    def _cmd_desinstalar(self):
+        """Diálogo de selección de componentes a eliminar."""
+        ed = self._eclipse_dir
+        if not ed:
+            return
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Desinstalar ECLIPSE-T")
+        dlg.configure(bg=BG)
+        dlg.resizable(False, False)
+        dlg.grab_set()
+        dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
+
+        tk.Label(dlg, text="Desinstalar ECLIPSE-T",
+                 font=("Georgia", 14, "bold"), fg=RED, bg=BG).pack(pady=(16, 2))
+        tk.Label(dlg, text=f"Directorio: {ed}",
+                 font=("Courier", 8), fg=DIM, bg=BG).pack()
+        tk.Frame(dlg, height=1, bg=DARK).pack(fill="x", padx=20, pady=8)
+
+        tk.Label(dlg, text="Seleccione qué componentes eliminar:",
+                 font=("Georgia", 10), fg=TEXT, bg=BG).pack(anchor="w", padx=24, pady=(0, 6))
+
+        var_config = tk.BooleanVar(value=True)
+        var_exes   = tk.BooleanVar(value=False)
+        var_modelo = tk.BooleanVar(value=False)
+        var_datos  = tk.BooleanVar(value=False)
+
+        opts = tk.Frame(dlg, bg=BG)
+        opts.pack(fill="x", padx=24, pady=2)
+
+        def _chk(var, text, color=TEXT, bold=False):
+            font = ("Georgia", 9, "bold") if bold else ("Georgia", 9)
+            tk.Checkbutton(opts, variable=var, text=text,
+                           font=font, fg=color, bg=BG, selectcolor=BG2,
+                           activebackground=BG).pack(anchor="w", pady=2)
+
+        _chk(var_config, "Eliminar configuración del centro  (centros.dat, .key, config_centro.json)")
+        _chk(var_exes,   "Eliminar ejecutables  (ECLIPSE-T.exe, helios.exe, geckodriver.exe)")
+        _chk(var_modelo, "Eliminar modelo de voz  (modelos/base.pt  ≈ 139 MB)")
+        _chk(var_datos,
+             "⚠  Eliminar datos clínicos  (Archivos_ECICEP/)  — IRREVERSIBLE",
+             color=RED, bold=True)
+
+        tk.Label(dlg,
+                 text="Los datos clínicos NO pueden recuperarse.\n"
+                      "Asegúrese de tener un respaldo antes de continuar.",
+                 font=("Georgia", 8, "italic"), fg=RED, bg=BG,
+                 justify="left").pack(anchor="w", padx=28, pady=(2, 10))
+
+        tk.Frame(dlg, height=1, bg=DARK).pack(fill="x", padx=20, pady=4)
+
+        btns = tk.Frame(dlg, bg=BG)
+        btns.pack(pady=(0, 14))
+
+        def _confirmar():
+            if not any([var_config.get(), var_exes.get(), var_modelo.get(), var_datos.get()]):
+                messagebox.showwarning("Nada seleccionado",
+                                       "Seleccione al menos una opción.",
+                                       parent=dlg)
+                return
+            if var_datos.get():
+                if not messagebox.askyesno(
+                    "⚠  Confirmación final",
+                    "Está a punto de eliminar datos clínicos de forma PERMANENTE.\n\n"
+                    "Esta acción NO puede deshacerse.\n\n"
+                    "¿Está completamente seguro de continuar?",
+                    parent=dlg, icon="warning",
+                ):
+                    return
+            dlg.destroy()
+            self._ejecutar_desinstalacion(
+                config=var_config.get(),
+                exes=var_exes.get(),
+                modelo=var_modelo.get(),
+                datos=var_datos.get(),
+            )
+
+        tk.Button(btns, text="Confirmar desinstalación",
+                  font=("Georgia", 10, "bold"),
+                  bg=RED, fg="white", relief="flat", padx=14, pady=6,
+                  activebackground="#9B1B1B",
+                  command=_confirmar).pack(side="left", padx=(0, 10))
+        tk.Button(btns, text="Cancelar",
+                  font=("Georgia", 10), bg=DARK, fg=TEXT,
+                  relief="flat", padx=14, pady=6,
+                  command=dlg.destroy).pack(side="left")
+
+        dlg.update_idletasks()
+        sw, sh = dlg.winfo_screenwidth(), dlg.winfo_screenheight()
+        w, h   = dlg.winfo_width(), dlg.winfo_height()
+        dlg.geometry(f"+{(sw-w)//2}+{(sh-h)//2}")
+
+    def _ejecutar_desinstalacion(self, config: bool, exes: bool,
+                                  modelo: bool, datos: bool):
+        """Elimina los componentes seleccionados y muestra un resumen."""
+        eliminados: list[str] = []
+        errores:    list[str] = []
+        ed = self._eclipse_dir
+
+        def _rm(path: Path, desc: str):
+            try:
+                if path.is_dir():
+                    shutil.rmtree(path)
+                elif path.exists():
+                    path.unlink()
+                else:
+                    return
+                eliminados.append(desc)
+            except Exception as exc:
+                errores.append(f"{desc}: {exc}")
+
+        if config:
+            _rm(ed / "resources" / "centros.dat", "centros.dat")
+            _rm(ed / "resources" / ".key",         ".key")
+            _rm(ed / "config_centro.json",          "config_centro.json")
+
+        if exes:
+            for nombre in ("ECLIPSE-T.exe", "helios.exe", "HELIOS.exe",
+                            "geckodriver.exe", "HADES.exe"):
+                _rm(ed / nombre, nombre)
+
+        if modelo:
+            _rm(ed / "modelos" / "base.pt",  "modelos/base.pt")
+            _rm(ed / "modelos" / "small.pt", "modelos/small.pt")
+
+        if datos:
+            _rm(ed / "Archivos_ECICEP", "Archivos_ECICEP/")
+            _rm(ed / "logs",            "logs/")
+
+        resumen = ""
+        if eliminados:
+            resumen += "Eliminados:\n" + "\n".join(f"  ✓ {x}" for x in eliminados)
+        if errores:
+            resumen += "\n\nErrores:\n" + "\n".join(f"  ✗ {x}" for x in errores)
+        if not resumen:
+            resumen = "No se encontraron archivos para eliminar."
+
+        if exes or datos:
+            resumen += "\n\nHEFESTOS se cerrará ahora."
+            messagebox.showinfo("Desinstalación completada", resumen, parent=self.root)
+            os._exit(0)
+        else:
+            messagebox.showinfo("Desinstalación completada", resumen, parent=self.root)
+            if config:
+                self._mostrar(self._f_inicio)
 
     # ── Pantalla 3: Configuración del centro ─────────────────────────────────
 
@@ -1229,7 +1563,15 @@ class HefestosApp:
                 self._cfg[key].set(str(val))
 
     def _omitir_config(self):
-        self._iniciar_instalacion()
+        self._pedir_tc_y_instalar()
+
+    def _pedir_tc_y_instalar(self):
+        """Muestra el EULA antes de iniciar la instalación. (Task 3)"""
+        _DialogoLicencia(
+            self.root,
+            on_acepto=self._iniciar_instalacion,
+            on_rechazo=lambda: None,
+        )
 
     def _guardar_config(self):
         if not self._eclipse_dir:
@@ -1284,7 +1626,7 @@ class HefestosApp:
         self._regenerar_config_centro(datos)
 
         self._modo_agregar_centro = False
-        self._iniciar_instalacion()
+        self._pedir_tc_y_instalar()
 
     def _obtener_o_crear_key(self, recursos: Path) -> bytes | None:
         if not _CRYPTO_OK:
@@ -1518,7 +1860,73 @@ class HefestosApp:
                     self._emit(tipo="paso_ok", id=paso["id"])
                 else:
                     self._emit(tipo="paso_error", id=paso["id"])
+        self._prewarm_eclipse()
         self._emit(tipo="fin")
+
+    def _prewarm_eclipse(self) -> None:
+        """
+        Lanza ECLIPSE-T.exe silenciosamente para que PyInstaller extraiga el
+        bundle a %TEMP% la primera vez. La próxima apertura abre en ~5 seg.
+        Se omite si ya hay una instancia corriendo o si el exe no existe.
+        """
+        import socket as _s
+        exe = (self._eclipse_dir / "ECLIPSE-T.exe") if self._eclipse_dir else None
+        if not exe or not exe.exists():
+            return
+
+        # Comprobar si ya hay una instancia de ECLIPSE corriendo (puerto 47291)
+        try:
+            chk = _s.socket(_s.AF_INET, _s.SOCK_STREAM)
+            chk.setsockopt(_s.SOL_SOCKET, _s.SO_REUSEADDR, 0)
+            chk.bind(("127.0.0.1", 47291))
+            chk.close()
+        except OSError:
+            self._emit(tipo="log", texto="  Pre-extracción omitida — ECLIPSE ya está en ejecución.")
+            return
+
+        self._emit(tipo="estado", texto="Preparando primera ejecución…")
+        self._emit(tipo="log",    texto="── Pre-extracción del bundle PyInstaller ──────")
+        self._emit(tipo="log",    texto="  Iniciando ECLIPSE-T para cachear archivos temporales…")
+        self._emit(tipo="log",    texto="  (Primera apertura: ~60 seg  →  siguientes: ~5 seg)")
+
+        try:
+            proc = subprocess.Popen(
+                [str(exe)], cwd=str(self._eclipse_dir),
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        except Exception as exc:
+            self._emit(tipo="log", texto=f"  No se pudo iniciar ECLIPSE-T: {exc}")
+            return
+
+        # Esperar a que ECLIPSE adquiera el lock del puerto 47291
+        # (significa que el bundle está extraído y Python arrancó)
+        deadline = time.time() + 100
+        listo = False
+        while time.time() < deadline:
+            if proc.poll() is not None:
+                self._emit(tipo="log", texto="  ECLIPSE terminó antes de completar la extracción.")
+                return
+            try:
+                chk = _s.socket(_s.AF_INET, _s.SOCK_STREAM)
+                chk.setsockopt(_s.SOL_SOCKET, _s.SO_REUSEADDR, 0)
+                chk.bind(("127.0.0.1", 47291))
+                chk.close()
+            except OSError:
+                listo = True
+                break
+            time.sleep(2)
+
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+        if listo:
+            self._emit(tipo="log", texto="  Bundle cacheado. ECLIPSE abrirá casi instantáneamente.")
+        else:
+            self._emit(tipo="log", texto="  Tiempo agotado — primer inicio puede tardar ~60 seg.")
+        self._emit(tipo="log", texto="───────────────────────────────────────────────")
 
     def _ejecutar_paso(self, paso: dict) -> bool:
         tipo = paso["tipo"]
@@ -1951,7 +2359,7 @@ class HefestosApp:
 
     def _mostrar_final(self):
         self._mostrar(self._f_final)
-        self.root.after(800, self._exigir_tc)
+        self._btn_abrir.configure(state="normal")
 
     def _exigir_tc(self):
         _DialogoLicencia(
