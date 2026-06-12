@@ -51,16 +51,11 @@ def resource_path(rel: str) -> str:
 
 OLYMPUS_RAW   = "https://raw.githubusercontent.com/Faerigan/OLYMPUS/main"
 _ECLIPSE_REPO = "Faerigan/eclipse-t"   # repo privado — releases con los EXEs
+_HEFESTOS_VERSION = "2.2"
 
 
 def _cargar_github_token() -> str:
-    """
-    Carga el token GitHub para el repo OLYMPUS.
-    Orden de búsqueda:
-      1. D:/ECLIPSE/.tokens  (JSON con clave "olympus")
-      2. hefestos_key_validator._GITHUB_TOKEN  (token embebido en el exe)
-    """
-    # 1. Intentar desde .tokens (permite rotación sin recompilar)
+    """Token de escritura para OLYMPUS (SCRAP_METAL.csv)."""
     for tokens_path in (
         Path("D:/ECLIPSE/.tokens"),
         Path("E:/ECLIPSE/.tokens"),
@@ -74,7 +69,31 @@ def _cargar_github_token() -> str:
                     return tok
         except Exception:
             pass
-    # 2. Fallback: token embebido en hefestos_key_validator
+    try:
+        import importlib, sys as _sys
+        _sys.path.insert(0, str(_BASE_DIR))
+        mod = importlib.import_module("hefestos_key_validator")
+        return getattr(mod, "_GITHUB_TOKEN", "") or ""
+    except Exception:
+        return ""
+
+
+def _cargar_eclipse_token() -> str:
+    """Token de lectura para Faerigan/eclipse-t (repo privado, releases con EXEs)."""
+    for tokens_path in (
+        Path("D:/ECLIPSE/.tokens"),
+        Path("E:/ECLIPSE/.tokens"),
+        _BASE_DIR.parent / "ECLIPSE" / ".tokens",
+    ):
+        try:
+            if tokens_path.exists():
+                import json as _json
+                data = _json.loads(tokens_path.read_text("utf-8"))
+                tok = data.get("eclipse_t", "") or data.get("olympus", "")
+                if tok:
+                    return tok
+        except Exception:
+            pass
     try:
         import importlib, sys as _sys
         _sys.path.insert(0, str(_BASE_DIR))
@@ -743,6 +762,7 @@ class HefestosApp:
 
         self._construir_ui()
         self._detectar_eclipse()
+        self.root.after(800, self._chequeo_startup)
 
     # ── Layout con pilares ───────────────────────────────────────────────────
 
@@ -894,7 +914,13 @@ class HefestosApp:
             self._f_inicio_ok, text="",
             font=("Georgia", 10, "italic"), fg=DIM, bg=BG
         )
-        self._lbl_centro_nombre_ok.pack(pady=(0, 14))
+        self._lbl_centro_nombre_ok.pack(pady=(0, 4))
+
+        self._lbl_version_ok = tk.Label(
+            self._f_inicio_ok, text=f"HEFESTOS v{_HEFESTOS_VERSION}",
+            font=("Georgia", 8), fg=GRAY, bg=BG
+        )
+        self._lbl_version_ok.pack(pady=(0, 10))
 
         btns_ok = tk.Frame(self._f_inicio_ok, bg=BG)
         btns_ok.pack(pady=(0, 10))
@@ -1173,6 +1199,7 @@ class HefestosApp:
         self._var_clave.set("")
         self._lbl_msg.config(text="")
         self._mostrar(self._f_inicio)
+        self.root.after(0, self._actualizar_modo_inicio)
 
     # ── Mantenimiento (Reparar / Desinstalar) ────────────────────────────────
 
@@ -2067,11 +2094,11 @@ class HefestosApp:
                         texto=f"{asset_name} ya presente ({destino.stat().st_size // (1024*1024)} MB) — omitiendo descarga")
             return True  # Mostrar ✓ verde, no – gris
 
-        # ── 2. Token ─────────────────────────────────────────────────────────
-        token = _cargar_github_token()
+        # ── 2. Token (eclipse_t — acceso a repo privado) ─────────────────────
+        token = _cargar_eclipse_token()
         if not token:
             self._emit(tipo="log",
-                        texto=f"WARN: sin token GitHub — {asset_name} no descargado automáticamente")
+                        texto=f"WARN: sin token eclipse_t — {asset_name} no descargado automáticamente")
             self._emit(tipo="log",
                         texto=f"  Copie {asset_name} manualmente a: {destino.parent}")
             return "skip"
@@ -2299,6 +2326,105 @@ class HefestosApp:
                 return False
         self._emit(tipo="log", texto="eclipse_t_v3.py no encontrado")
         return False
+
+    # ── Startup: chequeo de versión OLYMPUS ──────────────────────────────────
+
+    def _chequeo_startup(self):
+        """
+        Corre en background al inicio.
+        1. Verifica versión HEFESTOS contra manifest.json de OLYMPUS.
+        2. Si hay nueva versión → muestra banner opcional (no bloquea).
+        Timeout 4 s. Silencioso en caso de error de red.
+        """
+        def _run():
+            try:
+                url = f"{OLYMPUS_RAW}/manifest.json"
+                req = urllib.request.Request(
+                    url, headers={"User-Agent": f"HEFESTOS/{_HEFESTOS_VERSION}"})
+                with urllib.request.urlopen(req, timeout=4) as r:
+                    manifest = json.loads(r.read())
+                v_remota = (manifest.get("versiones", {})
+                                    .get("hefestos", {})
+                                    .get("version", ""))
+                if v_remota and v_remota != _HEFESTOS_VERSION:
+                    self.root.after(0, lambda v=v_remota: self._banner_actualizacion(v))
+                elif hasattr(self, "_lbl_version_ok"):
+                    self.root.after(0, lambda: self._lbl_version_ok.config(
+                        text=f"HEFESTOS v{_HEFESTOS_VERSION}  ✓ actualizado", fg=GREEN))
+            except Exception:
+                pass  # silencioso — red inestable, rural-first
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _banner_actualizacion(self, version_nueva: str):
+        """Dialog no-modal que avisa de una nueva versión disponible."""
+        dlg = tk.Toplevel(self.root)
+        dlg.title("HEFESTOS — Actualización disponible")
+        dlg.configure(bg=BG)
+        dlg.resizable(False, False)
+        dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
+
+        # Centrar sobre ventana principal
+        self.root.update_idletasks()
+        rx, ry = self.root.winfo_x(), self.root.winfo_y()
+        rw, rh = self.root.winfo_width(), self.root.winfo_height()
+        dlg.update_idletasks()
+        dw, dh = 420, 220
+        dlg.geometry(f"{dw}x{dh}+{rx + (rw - dw)//2}+{ry + (rh - dh)//2}")
+
+        tk.Label(dlg, text="Nueva versión disponible",
+                 font=("Georgia", 13, "bold"), fg=GOLD, bg=BG).pack(pady=(18, 4))
+        tk.Label(dlg,
+                 text=f"Versión actual:    v{_HEFESTOS_VERSION}\n"
+                      f"Versión nueva:     v{version_nueva}",
+                 font=("Courier", 10), fg=TEXT, bg=BG, justify="center").pack(pady=(0, 6))
+        tk.Label(dlg,
+                 text="La actualización se descargará al mismo directorio.\n"
+                      "Cierre HEFESTOS y use el nuevo archivo cuando termine.",
+                 font=("Georgia", 8), fg=DIM, bg=BG, justify="center").pack(pady=(0, 14))
+
+        btns = tk.Frame(dlg, bg=BG)
+        btns.pack()
+
+        def _descargar():
+            btn_dl.config(state="disabled", text="Descargando…")
+            dlg.update()
+            dest_dir = (Path(sys.executable).parent
+                        if getattr(sys, "frozen", False) else _BASE_DIR)
+            destino  = dest_dir / f"HEFESTOS_v{version_nueva}.exe"
+
+            def _hilo():
+                ok = self._descargar_release_github("HEFESTOS.exe", destino, 25)
+                if ok is True:
+                    self.root.after(0, lambda: messagebox.showinfo(
+                        "Descarga completa",
+                        f"HEFESTOS v{version_nueva} descargado en:\n{destino}\n\n"
+                        "Cierre esta ventana y use el nuevo ejecutable.",
+                        parent=dlg))
+                else:
+                    self.root.after(0, lambda: messagebox.showwarning(
+                        "Error de descarga",
+                        "No se pudo descargar la actualización automáticamente.\n"
+                        "Descárguela manualmente desde github.com/Faerigan/eclipse-t",
+                        parent=dlg))
+                self.root.after(0, dlg.destroy)
+
+            threading.Thread(target=_hilo, daemon=True).start()
+
+        btn_dl = tk.Button(btns, text="  Descargar ahora  ↓  ",
+                           font=("Georgia", 10, "bold"),
+                           bg=ACCENT, fg="white", relief="flat", padx=12, pady=6,
+                           activebackground="#A87018", command=_descargar)
+        btn_dl.pack(side="left", padx=(0, 10))
+
+        tk.Button(btns, text="Luego",
+                  font=("Georgia", 10), bg=DARK, fg=TEXT,
+                  relief="flat", padx=14, pady=6,
+                  command=dlg.destroy).pack(side="left")
+
+        if hasattr(self, "_lbl_version_ok"):
+            self._lbl_version_ok.config(
+                text=f"HEFESTOS v{_HEFESTOS_VERSION}  ⬆ v{version_nueva} disponible",
+                fg=ACCENT)
 
     # ── Pantalla 5: Final ────────────────────────────────────────────────────
 
