@@ -1610,18 +1610,19 @@ class HefestosApp:
         recursos = self._eclipse_dir / "resources"
         recursos.mkdir(exist_ok=True)
 
-        # Copiar logos; si no hay logo principal → usar logo_dr_vargas.png
-        for campo, dest_name in (("logo_principal",  "logo_centro.png"),
-                                  ("logo_secundario", "logo_ss.png")):
+        # Copiar logos con nombre único por centro para evitar que se pisen
+        _cid = nuevo.get("id", "centro")
+        for campo, dest_template in (("logo_principal",  f"logo_centro_{_cid}.png"),
+                                      ("logo_secundario", f"logo_ss_{_cid}.png")):
             src = nuevo.get(campo, "").strip()
             if src and Path(src).exists():
-                shutil.copy2(src, recursos / dest_name)
-                nuevo[campo] = dest_name
+                shutil.copy2(src, recursos / dest_template)
+                nuevo[campo] = dest_template
             elif not src and campo == "logo_principal":
                 default = recursos / "logo_dr_vargas.png"
                 if default.exists():
-                    shutil.copy2(default, recursos / dest_name)
-                    nuevo[campo] = dest_name
+                    shutil.copy2(default, recursos / dest_template)
+                    nuevo[campo] = dest_template
 
         # Cifrar credenciales individualmente
         fkey = self._obtener_o_crear_key(recursos)
@@ -2478,14 +2479,33 @@ class HefestosApp:
                   command=lambda: __import__("webbrowser").open(
                       "https://www.mozilla.org/firefox/")).pack(anchor="w", padx=8, pady=(4, 6))
 
-        tk.Button(fr, text="Cerrar",
+        self._btn_cerrar = tk.Button(fr, text="Cerrar",
                   font=("Georgia", 10), bg=DARK, fg=TEXT,
                   relief="flat", padx=16, pady=6,
-                  command=self.root.destroy).pack(pady=(8, 0))
+                  command=self.root.destroy)
+        self._btn_cerrar.pack(pady=(8, 0))
+        self._countdown_id: "str | None" = None
 
     def _mostrar_final(self):
         self._mostrar(self._f_final)
         self._btn_abrir.configure(state="normal")
+        self._iniciar_cuenta_regresiva(15)
+
+    def _iniciar_cuenta_regresiva(self, seg: int):
+        """Cuenta regresiva que auto-cierra HEFESTOS al llegar a 0."""
+        if seg <= 0:
+            self.root.destroy()
+            return
+        self._btn_cerrar.configure(text=f"Cerrar  ({seg})")
+        self._countdown_id = self.root.after(
+            1000, lambda: self._iniciar_cuenta_regresiva(seg - 1)
+        )
+
+    def _cancelar_cuenta(self):
+        if self._countdown_id:
+            self.root.after_cancel(self._countdown_id)
+            self._countdown_id = None
+            self._btn_cerrar.configure(text="Cerrar")
 
     def _exigir_tc(self):
         _DialogoLicencia(
@@ -2495,6 +2515,7 @@ class HefestosApp:
         )
 
     def _abrir_eclipse(self):
+        self._cancelar_cuenta()
         if not self._eclipse_dir:
             return
         # Intentar ejecutable compilado primero
