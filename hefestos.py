@@ -1944,9 +1944,16 @@ class HefestosApp:
                 break
             time.sleep(2)
 
-        proc.terminate()
+        # Matar árbol completo: bootloader PyInstaller (padre) + proceso Python hijo
         try:
-            proc.wait(timeout=10)
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                capture_output=True, timeout=5,
+            )
+        except Exception:
+            proc.terminate()
+        try:
+            proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
 
