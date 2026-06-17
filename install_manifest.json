@@ -48,14 +48,33 @@
       "id": "hermes_deps",
       "nombre": "HERMES — Modelo de voz",
       "icono": "microphone",
+      "_nota": "base.pt y small.pt ya vienen bundleados en ECLIPSE-T.exe — no requieren descarga separada",
       "pasos": [
         {
-          "id": "whisper_model",
-          "desc": "Descargar modelo de voz HERMES base (~139 MB)",
+          "id": "whisper_model_base",
+          "desc": "Verificar modelo de voz HERMES base (~139 MB) — bundleado en ECLIPSE-T.exe",
           "tipo": "descarga",
           "url_completa": "https://openaipublic.azureedge.net/main/whisper/models/ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f668f8b0e6c6326e34e/base.pt",
           "destino": "modelos/base.pt",
-          "mb": 139
+          "mb": 139,
+          "opcional": true
+        }
+      ]
+    },
+    {
+      "id": "hermes_turbo",
+      "nombre": "HERMES — Modelo turbo (opcional, alta calidad)",
+      "icono": "microphone",
+      "_nota": "Opcional — mejor calidad de transcripción. URL verificable con: python -c \"import whisper; print(whisper._MODELS['turbo'])\"",
+      "pasos": [
+        {
+          "id": "whisper_model_turbo",
+          "desc": "Descargar modelo de voz HERMES turbo (~809 MB) — transcripción de alta calidad",
+          "tipo": "descarga",
+          "url_completa": "https://openaipublic.azureedge.net/main/whisper/models/aff26ae408abcba5fbf8813bf08a19cac6063e09/large-v3-turbo.pt",
+          "destino": "modelos/large-v3-turbo.pt",
+          "mb": 809,
+          "opcional": true
         }
       ]
     },
