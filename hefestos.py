@@ -51,7 +51,7 @@ def resource_path(rel: str) -> str:
 
 OLYMPUS_RAW   = "https://raw.githubusercontent.com/Faerigan/OLYMPUS/main"
 _ECLIPSE_REPO = "Faerigan/eclipse-t"   # repo privado — releases con los EXEs
-_HEFESTOS_VERSION = "2.2"
+_HEFESTOS_VERSION = "2.3"
 
 
 def _cargar_github_token() -> str:
@@ -736,9 +736,10 @@ class HefestosApp:
         self.root.resizable(False, False)
         self.root.withdraw()  # ocultar hasta centrar
         self.root.update_idletasks()
-        w, h = 700, 760
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
+        w = min(700, max(560, sw - 100))   # deja 50 px de margen a cada lado
+        h = min(760, max(620, sh - 80))    # deja 40 px de margen arriba/abajo
         x = max(0, (sw - w) // 2)
         y = max(0, (sh - h) // 2)
         self.root.geometry(f"{w}x{h}+{x}+{y}")
@@ -802,6 +803,12 @@ class HefestosApp:
         h = self.root.winfo_height() or 760
         _dibujar_columnas(self._cv_izq, 44, h)
         _dibujar_columnas(self._cv_der, 44, h)
+
+    def _turbo_instalado(self) -> bool:
+        """Verifica si el modelo Whisper turbo (large-v3-turbo.pt) está instalado."""
+        if not self._eclipse_dir:
+            return False
+        return (self._eclipse_dir / "modelos" / "large-v3-turbo.pt").exists()
 
     def _mostrar(self, frame: tk.Frame):
         for f in (self._f_inicio, self._f_reconfig, self._f_config,
@@ -920,7 +927,13 @@ class HefestosApp:
             self._f_inicio_ok, text=f"HEFESTOS v{_HEFESTOS_VERSION}",
             font=("Georgia", 8), fg=GRAY, bg=BG
         )
-        self._lbl_version_ok.pack(pady=(0, 10))
+        self._lbl_version_ok.pack(pady=(0, 2))
+
+        self._lbl_turbo_ok = tk.Label(
+            self._f_inicio_ok, text="",
+            font=("Georgia", 8), fg=GRAY, bg=BG
+        )
+        self._lbl_turbo_ok.pack(pady=(0, 8))
 
         btns_ok = tk.Frame(self._f_inicio_ok, bg=BG)
         btns_ok.pack(pady=(0, 10))
@@ -967,6 +980,13 @@ class HefestosApp:
                         nombre  = (centros[idx].get("nombre_centro", "")
                                    if centros and idx < len(centros) else "")
                         self._lbl_centro_nombre_ok.config(text=nombre)
+                    if hasattr(self, "_lbl_turbo_ok"):
+                        if self._turbo_instalado():
+                            self._lbl_turbo_ok.config(
+                                text="⚡ Modelo turbo instalado", fg=GREEN)
+                        else:
+                            self._lbl_turbo_ok.config(
+                                text="○ Modelo turbo no instalado  (809 MB, opcional)", fg=GRAY)
                 except Exception:
                     self._lbl_centro_nombre_ok.config(text="")
                 self._f_nuevo.pack_forget()
@@ -1306,6 +1326,7 @@ class HefestosApp:
         var_config = tk.BooleanVar(value=True)
         var_exes   = tk.BooleanVar(value=False)
         var_modelo = tk.BooleanVar(value=False)
+        var_turbo  = tk.BooleanVar(value=False)
         var_datos  = tk.BooleanVar(value=False)
 
         opts = tk.Frame(dlg, bg=BG)
@@ -1319,7 +1340,11 @@ class HefestosApp:
 
         _chk(var_config, "Eliminar configuración del centro  (centros.dat, .key, config_centro.json)")
         _chk(var_exes,   "Eliminar ejecutables  (ECLIPSE-T.exe, helios.exe, geckodriver.exe)")
-        _chk(var_modelo, "Eliminar modelo de voz  (modelos/base.pt  ≈ 139 MB)")
+        _chk(var_modelo, "Eliminar modelo de voz base  (modelos/base.pt  ≈ 139 MB)")
+        turbo_txt = ("⚡ Eliminar modelo turbo instalado  (modelos/large-v3-turbo.pt  ≈ 809 MB)"
+                     if self._turbo_instalado()
+                     else "○ Modelo turbo no instalado  (nada que eliminar)")
+        _chk(var_turbo, turbo_txt, color=(DIM if not self._turbo_instalado() else TEXT))
         _chk(var_datos,
              "⚠  Eliminar datos clínicos  (Archivos_ECICEP/)  — IRREVERSIBLE",
              color=RED, bold=True)
@@ -1336,7 +1361,8 @@ class HefestosApp:
         btns.pack(pady=(0, 14))
 
         def _confirmar():
-            if not any([var_config.get(), var_exes.get(), var_modelo.get(), var_datos.get()]):
+            if not any([var_config.get(), var_exes.get(), var_modelo.get(),
+                        var_turbo.get(), var_datos.get()]):
                 messagebox.showwarning("Nada seleccionado",
                                        "Seleccione al menos una opción.",
                                        parent=dlg)
@@ -1355,6 +1381,7 @@ class HefestosApp:
                 config=var_config.get(),
                 exes=var_exes.get(),
                 modelo=var_modelo.get(),
+                turbo=var_turbo.get(),
                 datos=var_datos.get(),
             )
 
@@ -1374,7 +1401,8 @@ class HefestosApp:
         dlg.geometry(f"+{(sw-w)//2}+{(sh-h)//2}")
 
     def _ejecutar_desinstalacion(self, config: bool, exes: bool,
-                                  modelo: bool, datos: bool):
+                                  modelo: bool, turbo: bool = False,
+                                  datos: bool = False):
         """Elimina los componentes seleccionados y muestra un resumen."""
         eliminados: list[str] = []
         errores:    list[str] = []
@@ -1405,6 +1433,9 @@ class HefestosApp:
         if modelo:
             _rm(ed / "modelos" / "base.pt",  "modelos/base.pt")
             _rm(ed / "modelos" / "small.pt", "modelos/small.pt")
+
+        if turbo:
+            _rm(ed / "modelos" / "large-v3-turbo.pt", "modelos/large-v3-turbo.pt")
 
         if datos:
             _rm(ed / "Archivos_ECICEP", "Archivos_ECICEP/")
@@ -1994,8 +2025,12 @@ class HefestosApp:
 
         if tipo == "descarga":
             # Soporta url_completa (URL directa) o url relativa a OLYMPUS_RAW
-            url     = paso.get("url_completa") or f"{OLYMPUS_RAW}/{paso['url']}"
-            destino = self._eclipse_dir / paso["destino"]  # type: ignore
+            url = paso.get("url_completa") or f"{OLYMPUS_RAW}/{paso['url']}"
+            if not self._eclipse_dir:
+                self._emit(tipo="log",
+                            texto=f"⚠ No se pudo determinar directorio de instalación — omitiendo {paso['destino']}")
+                return False
+            destino = self._eclipse_dir / paso["destino"]
             # Pre-check: si el archivo ya existe con tamaño razonable, omitir descarga
             min_bytes = int(paso.get("mb", 0) * 1024 * 1024 * 0.5)
             if destino.exists() and destino.stat().st_size > max(4096, min_bytes):
@@ -2003,6 +2038,7 @@ class HefestosApp:
                 self._emit(tipo="log",
                             texto=f"{paso['destino']} ya presente ({mb_local:.0f} MB) — omitiendo descarga")
                 return True  # Mostrar ✓ verde
+            self._emit(tipo="log", texto=f"Destino: {destino}")
             return self._descargar_archivo(url, destino, paso.get("url", paso["destino"]))
 
         if tipo == "verificar_app":
@@ -2454,13 +2490,17 @@ class HefestosApp:
             dibujar_logo(cv_logo, 70, 70, s=0.72)
 
         tk.Label(fr, text="Instalación completada",
-                 font=("Georgia", 17, "bold"), fg=GREEN, bg=BG).pack(pady=(14, 4))
+                 font=("Georgia", 17, "bold"), fg=GREEN, bg=BG).pack(pady=(10, 4))
 
         tk.Label(fr,
                  text="Todos los componentes están instalados.\n"
                       "ECLIPSE-T está listo para su uso.",
                  font=("Georgia", 10), fg=TEXT, bg=BG, justify="center",
-                 ).pack(pady=(0, 16))
+                 ).pack(pady=(0, 6))
+
+        self._lbl_turbo_final = tk.Label(fr, text="",
+                 font=("Georgia", 8), fg=GRAY, bg=BG)
+        self._lbl_turbo_final.pack(pady=(0, 10))
 
         self._btn_abrir = tk.Button(fr, text="  Abrir ECLIPSE-T  ▶  ",
                   font=("Georgia", 13, "bold"),
@@ -2496,7 +2536,14 @@ class HefestosApp:
     def _mostrar_final(self):
         self._mostrar(self._f_final)
         self._btn_abrir.configure(state="normal")
-        self._iniciar_cuenta_regresiva(15)
+        if hasattr(self, "_lbl_turbo_final"):
+            if self._turbo_instalado():
+                self._lbl_turbo_final.config(
+                    text="⚡ Modelo turbo instalado — transcripción de alta calidad", fg=GREEN)
+            else:
+                self._lbl_turbo_final.config(
+                    text="○ Modelo turbo no instalado  (opcional, 809 MB)", fg=GRAY)
+        self._iniciar_cuenta_regresiva(10)
 
     def _iniciar_cuenta_regresiva(self, seg: int):
         """Cuenta regresiva que auto-cierra HEFESTOS al llegar a 0."""
