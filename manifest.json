@@ -4,7 +4,7 @@
     "repo": "https://github.com/Faerigan/OLYMPUS",
     "raw_base": "https://raw.githubusercontent.com/Faerigan/OLYMPUS/main",
     "licencia": "Uso exclusivo profesionales de salud certificados",
-    "ultima_actualizacion": "19.06.2026"
+    "ultima_actualizacion": "22.06.2026"
   },
   "versiones": {
     "eclipse_t": {
@@ -14,19 +14,19 @@
     },
     "hermes": {
       "version": "3.0",
-      "vocab_version": "1.1",
+      "vocab_version": "2.1",
       "estado": "estable"
     },
     "helios": {
-      "version": "2.1",
+      "version": "3.3.0",
       "estado": "estable"
     },
     "hefestos": {
-      "version": "2.3",
+      "version": "2.4",
       "estado": "estable"
     },
     "olympus": {
-      "version": "1.1",
+      "version": "1.2",
       "estado": "estable"
     }
   },
