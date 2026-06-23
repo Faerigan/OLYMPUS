@@ -51,7 +51,7 @@ def resource_path(rel: str) -> str:
 
 OLYMPUS_RAW   = "https://raw.githubusercontent.com/Faerigan/OLYMPUS/main"
 _ECLIPSE_REPO = "Faerigan/eclipse-t"   # repo privado — releases con los EXEs
-_HEFESTOS_VERSION = "2.3"
+_HEFESTOS_VERSION = "2.4"
 
 
 def _cargar_github_token() -> str:
@@ -1020,7 +1020,12 @@ class HefestosApp:
         self._mostrar(self._f_reconfig)
 
     def _detectar_eclipse(self):
-        candidatos = list(self._ECLIPSE_CANDIDATOS) + self._candidatos_desktop()
+        exe_dir = (Path(sys.executable).parent
+                   if getattr(sys, "frozen", False) else None)
+        candidatos = []
+        if exe_dir:
+            candidatos.append(exe_dir)
+        candidatos += list(self._ECLIPSE_CANDIDATOS) + self._candidatos_desktop()
         for p in candidatos:
             if p.exists() and (
                 (p / "ECLIPSE-T.exe").exists() or
@@ -1049,6 +1054,29 @@ class HefestosApp:
             return
         self._eclipse_dir = eclipse_dir
 
+        # ── Si ya hay centros configurados y NO estamos añadiendo uno nuevo ────
+        centros_dat = eclipse_dir / "resources" / "centros.dat"
+        if centros_dat.exists() and not self._modo_agregar_centro:
+            respuesta = messagebox.askyesno(
+                "HEFESTOS — Ya configurado",
+                "Este equipo ya tiene ECLIPSE-T instalado y configurado.\n\n"
+                "¿Desea AGREGAR un nuevo centro de salud?\n\n"
+                "   Sí  →  Agregar nuevo centro (requiere clave nueva)\n"
+                "   No  →  Reparar / cambiar centro activo (sin clave)",
+                parent=self.root,
+                icon="question",
+            )
+            if respuesta:
+                # Marcar "añadiendo centro" → próximo clic pedirá la clave
+                self._modo_agregar_centro = True
+                self._lbl_msg.config(
+                    text="Ingrese el código de instalación del nuevo centro.", fg=GOLD)
+            else:
+                self._poblar_reconfig()
+                self._mostrar(self._f_reconfig)
+            return
+
+        # ── Validar clave (primera instalación o agregar nuevo centro) ────────
         clave = self._var_clave.get().strip()
         if not clave:
             self._lbl_msg.config(text="Ingrese un código de instalación.", fg=RED)
@@ -1082,26 +1110,6 @@ class HefestosApp:
 
         if self._es_maestra:
             self._aplicar_defaults_maestra()
-
-        # ── Bifurcación: ¿ya hay centros configurados? ───────────────────────
-        centros_dat = eclipse_dir / "resources" / "centros.dat"
-        if centros_dat.exists():
-            respuesta = messagebox.askyesno(
-                "HEFESTOS — Ya configurado",
-                "Este equipo ya tiene ECLIPSE-T instalado y configurado.\n\n"
-                "¿Desea AGREGAR un nuevo centro de salud?\n\n"
-                "   Sí  →  Agregar nuevo centro (consume esta clave)\n"
-                "   No  →  Cambiar centro activo (sin reinstalar)",
-                parent=self.root,
-                icon="question",
-            )
-            if respuesta:
-                self._modo_agregar_centro = True
-                self._mostrar(self._f_config)
-            else:
-                self._poblar_reconfig()
-                self._mostrar(self._f_reconfig)
-            return
 
         self._mostrar(self._f_config)
 
@@ -2371,13 +2379,44 @@ class HefestosApp:
         self._emit(tipo="log", texto="eclipse_t_v3.py no encontrado")
         return False
 
+    # ── Versiones instaladas ──────────────────────────────────────────────────
+
+    def _leer_versiones_instaladas(self) -> dict:
+        """Lee olympus_installed.json con versiones de ECLIPSE y HELIOS instalados."""
+        if not self._eclipse_dir:
+            return {}
+        ruta = self._eclipse_dir / "resources" / "olympus_installed.json"
+        try:
+            with open(ruta, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+    def _escribir_versiones_instaladas(self):
+        """Registra versiones tras instalación/reparación exitosa."""
+        if not self._eclipse_dir:
+            return
+        ruta = self._eclipse_dir / "resources" / "olympus_installed.json"
+        try:
+            import datetime as _dt
+            data = {
+                "eclipse": "3.0",
+                "helios":  "3.3.0",
+                "installed_by": f"HEFESTOS v{_HEFESTOS_VERSION}",
+                "date": _dt.date.today().isoformat(),
+            }
+            with open(ruta, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
     # ── Startup: chequeo de versión OLYMPUS ──────────────────────────────────
 
     def _chequeo_startup(self):
         """
         Corre en background al inicio.
-        1. Verifica versión HEFESTOS contra manifest.json de OLYMPUS.
-        2. Si hay nueva versión → muestra banner opcional (no bloquea).
+        Verifica versiones de HEFESTOS, ECLIPSE-T y HELIOS contra manifest.json.
+        Muestra banner opcional si hay actualizaciones (no bloquea).
         Timeout 4 s. Silencioso en caso de error de red.
         """
         def _run():
@@ -2387,17 +2426,91 @@ class HefestosApp:
                     url, headers={"User-Agent": f"HEFESTOS/{_HEFESTOS_VERSION}"})
                 with urllib.request.urlopen(req, timeout=4) as r:
                     manifest = json.loads(r.read())
-                v_remota = (manifest.get("versiones", {})
-                                    .get("hefestos", {})
-                                    .get("version", ""))
-                if v_remota and v_remota != _HEFESTOS_VERSION:
-                    self.root.after(0, lambda v=v_remota: self._banner_actualizacion(v))
+                versiones = manifest.get("versiones", {})
+
+                v_hefestos = versiones.get("hefestos",  {}).get("version", "")
+                v_eclipse  = versiones.get("eclipse_t", {}).get("version", "")
+                v_helios   = versiones.get("helios",    {}).get("version", "")
+
+                instaladas = self._leer_versiones_instaladas()
+                e_inst = instaladas.get("eclipse", "")
+                h_inst = instaladas.get("helios",  "")
+
+                updates = []
+                if v_hefestos and v_hefestos != _HEFESTOS_VERSION:
+                    updates.append(("HEFESTOS", v_hefestos, "hefestos"))
+                if v_eclipse and e_inst and v_eclipse != e_inst:
+                    updates.append(("ECLIPSE-T", v_eclipse, "eclipse"))
+                if v_helios and h_inst and v_helios != h_inst:
+                    updates.append(("HELIOS", v_helios, "helios"))
+
+                if updates:
+                    self.root.after(0, lambda u=updates: self._notificar_actualizaciones(u))
                 elif hasattr(self, "_lbl_version_ok"):
                     self.root.after(0, lambda: self._lbl_version_ok.config(
                         text=f"HEFESTOS v{_HEFESTOS_VERSION}  ✓ actualizado", fg=GREEN))
             except Exception:
                 pass  # silencioso — red inestable, rural-first
         threading.Thread(target=_run, daemon=True).start()
+
+    def _notificar_actualizaciones(self, updates: list):
+        """Maneja notificaciones de actualización para uno o más componentes."""
+        hef = [(n, v, t) for n, v, t in updates if t == "hefestos"]
+        apps = [(n, v, t) for n, v, t in updates if t in ("eclipse", "helios")]
+
+        # Actualizar label de versión con resumen
+        if hasattr(self, "_lbl_version_ok"):
+            nombres = " + ".join(n for n, _, _ in updates)
+            self._lbl_version_ok.config(
+                text=f"⬆ Actualizaciones: {nombres}", fg=ACCENT)
+
+        # Si solo hay apps (ECLIPSE/HELIOS) → notificar vía label, ofrecer Reparar
+        if apps and not hef:
+            self._mostrar_nota_actualizacion_apps(apps)
+            return
+
+        # Si hay actualización de HEFESTOS → dialog de descarga (comportamiento original)
+        if hef:
+            self._banner_actualizacion(hef[0][1])
+            if apps:
+                # Mostrar también nota para las apps
+                self.root.after(100, lambda: self._mostrar_nota_actualizacion_apps(apps))
+
+    def _mostrar_nota_actualizacion_apps(self, apps: list):
+        """Muestra un Toplevel indicando que ECLIPSE/HELIOS tienen actualizaciones."""
+        dlg = tk.Toplevel(self.root)
+        dlg.title("OLYMPUS — Actualizaciones de aplicaciones")
+        dlg.configure(bg=BG)
+        dlg.resizable(False, False)
+        dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
+
+        self.root.update_idletasks()
+        rx, ry = self.root.winfo_x(), self.root.winfo_y()
+        rw, rh = self.root.winfo_width(), self.root.winfo_height()
+        dw, dh = 420, 200 + len(apps) * 22
+        dlg.geometry(f"{dw}x{dh}+{rx + (rw - dw)//2}+{ry + (rh - dh)//2}")
+
+        tk.Label(dlg, text="Actualizaciones disponibles",
+                 font=("Georgia", 13, "bold"), fg=GOLD, bg=BG).pack(pady=(18, 4))
+        for nombre, version, _ in apps:
+            tk.Label(dlg, text=f"  {nombre}  →  v{version}",
+                     font=("Courier", 10), fg=TEXT, bg=BG).pack(anchor="w", padx=50)
+
+        tk.Label(dlg,
+                 text="Use 'Reparar o reinstalar' para descargar\nlas versiones actualizadas.",
+                 font=("Georgia", 9), fg=DIM, bg=BG, justify="center").pack(pady=(10, 4))
+
+        btns = tk.Frame(dlg, bg=BG)
+        btns.pack(pady=(4, 12))
+        tk.Button(btns, text="  Reparar / Actualizar  🔧  ",
+                  font=("Georgia", 10, "bold"),
+                  bg=ACCENT, fg="white", relief="flat", padx=14, pady=7,
+                  activebackground="#A87018",
+                  command=lambda: (dlg.destroy(), self._cmd_reparar_directo())).pack(side="left", padx=(0, 8))
+        tk.Button(btns, text="Luego",
+                  font=("Georgia", 10), bg=DARK, fg=TEXT,
+                  relief="flat", padx=14, pady=6,
+                  command=dlg.destroy).pack(side="left")
 
     def _banner_actualizacion(self, version_nueva: str):
         """Dialog no-modal que avisa de una nueva versión disponible."""
@@ -2543,6 +2656,7 @@ class HefestosApp:
             else:
                 self._lbl_turbo_final.config(
                     text="○ Modelo turbo no instalado  (opcional, 809 MB)", fg=GRAY)
+        self._escribir_versiones_instaladas()
         self._iniciar_cuenta_regresiva(10)
 
     def _iniciar_cuenta_regresiva(self, seg: int):
