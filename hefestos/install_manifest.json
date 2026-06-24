@@ -1,0 +1,96 @@
+{
+  "_version": "2.1",
+  "_fecha": "04.06.2026",
+  "_nota": "Instalacion para ejecutables .exe — sin Python requerido en equipo destino",
+  "grupos": [
+    {
+      "id": "ejecutables",
+      "nombre": "Descargar ejecutables",
+      "icono": "download",
+      "pasos": [
+        {
+          "id": "dl_eclipse",
+          "desc": "Descargar ECLIPSE-T.exe (~653 MB)",
+          "tipo": "github_release",
+          "asset": "ECLIPSE-T.exe",
+          "destino": "eclipse_dir",
+          "mb": 653
+        },
+        {
+          "id": "dl_helios",
+          "desc": "Descargar HELIOS.exe",
+          "tipo": "github_release",
+          "asset": "HELIOS.exe",
+          "destino": "helios_dir",
+          "mb": 50
+        }
+      ]
+    },
+    {
+      "id": "helios_deps",
+      "nombre": "HELIOS — Navegador web",
+      "icono": "flask",
+      "pasos": [
+        {
+          "id": "firefox",
+          "desc": "Verificar Firefox instalado",
+          "tipo": "verificar_app",
+          "app": "firefox"
+        },
+        {
+          "id": "geckodriver",
+          "desc": "Descargar geckodriver compatible",
+          "tipo": "geckodriver"
+        }
+      ]
+    },
+    {
+      "id": "hermes_deps",
+      "nombre": "HERMES — Modelo de voz",
+      "icono": "microphone",
+      "_nota": "base.pt y small.pt ya vienen bundleados en ECLIPSE-T.exe — no requieren descarga separada",
+      "pasos": [
+        {
+          "id": "whisper_model_base",
+          "desc": "Verificar modelo de voz HERMES base (~139 MB) — bundleado en ECLIPSE-T.exe",
+          "tipo": "descarga",
+          "url_completa": "https://openaipublic.azureedge.net/main/whisper/models/ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f668f8b0e6c6326e34e/base.pt",
+          "destino": "modelos/base.pt",
+          "mb": 139,
+          "opcional": true
+        }
+      ]
+    },
+    {
+      "id": "hermes_turbo",
+      "nombre": "HERMES — Modelo turbo (opcional, alta calidad)",
+      "icono": "microphone",
+      "_nota": "Opcional — mejor calidad de transcripción. URL verificable con: python -c \"import whisper; print(whisper._MODELS['turbo'])\"",
+      "pasos": [
+        {
+          "id": "whisper_model_turbo",
+          "desc": "Descargar modelo de voz HERMES turbo (~809 MB) — transcripción de alta calidad",
+          "tipo": "descarga",
+          "url_completa": "https://openaipublic.azureedge.net/main/whisper/models/aff26ae408abcba5fbf8813c21e62b0941638c5f6eebfb145be0c9839262a19a/large-v3-turbo.pt",
+          "destino": "modelos/large-v3-turbo.pt",
+          "mb": 809,
+          "opcional": true
+        }
+      ]
+    },
+    {
+      "id": "vocab",
+      "nombre": "Vocabulario medico HERMES",
+      "icono": "book",
+      "pasos": [
+        {
+          "id": "vocab_hermes",
+          "desc": "Descargar vocabulario medico actualizado",
+          "tipo": "descarga",
+          "url": "hermes/hermes_vocab.json",
+          "destino": "data/hermes_vocab.json"
+        }
+      ]
+    }
+  ]
+}
