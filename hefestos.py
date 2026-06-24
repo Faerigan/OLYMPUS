@@ -17,12 +17,29 @@ import subprocess
 import sys
 import tempfile
 import threading
+import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from pathlib import Path
 
 # Python 3.14: CA con Basic Constraints no crítico rompe verificación en exe compilado
 ssl._create_default_https_context = ssl._create_unverified_context
+
+
+class _StripAuthOnRedirect(urllib.request.HTTPRedirectHandler):
+    """Strips Authorization header on cross-origin redirects (GitHub API → S3 signed URL).
+    S3 rejects requests that carry both a signed URL and an Authorization header."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new_req is None:
+            return None
+        orig_host = urllib.parse.urlparse(req.full_url).netloc
+        new_host  = urllib.parse.urlparse(newurl).netloc
+        if orig_host != new_host:
+            new_req.remove_header("Authorization")
+            new_req.remove_header("authorization")
+        return new_req
 # DPI awareness — Windows HiDPI (debe ir antes de crear Tk)
 try:
     from ctypes import windll
@@ -733,7 +750,7 @@ class HefestosApp:
         self.root = tk.Tk()
         self.root.title("HEFESTOS v2.0 — Instalador Ecosistema OLYMPUS")
         self.root.configure(bg=BG)
-        self.root.resizable(False, False)
+        self.root.resizable(True, True)
         self.root.withdraw()  # ocultar hasta centrar
         self.root.update_idletasks()
         sw = self.root.winfo_screenwidth()
@@ -743,6 +760,7 @@ class HefestosApp:
         x = max(0, (sw - w) // 2)
         y = max(0, (sh - h) // 2)
         self.root.geometry(f"{w}x{h}+{x}+{y}")
+        self.root.minsize(560, 620)
         self.root.deiconify()  # mostrar ya centrada
         self.root.protocol("WM_DELETE_WINDOW", self._cerrar)
 
@@ -752,6 +770,8 @@ class HefestosApp:
         self._es_maestra:           bool        = False
         self._modo_agregar_centro:  bool        = False
         self._forzar_nuevo_install: bool        = False
+        self._descargar_turbo:      bool        = False
+        self._modo_reparar:         bool        = False
         self._cfg:                  dict        = {}
 
         self._var_dir   = tk.StringVar()
@@ -1005,6 +1025,7 @@ class HefestosApp:
             messagebox.showerror("Error", "Directorio ECLIPSE-T no encontrado.",
                                  parent=self.root)
             return
+        self._modo_reparar = True
         self._iniciar_instalacion()
 
     def _cmd_cambiar_centro(self):
@@ -1810,7 +1831,7 @@ class HefestosApp:
         log_wrap.pack(fill="both", expand=True, padx=14, pady=(4, 8))
         self._log = tk.Text(log_wrap, bg=BG2, fg=TEXT,
                              font=("Courier", 8), relief="flat",
-                             state="disabled", wrap="word", height=6)
+                             state="disabled", wrap="word", height=3)
         sb2 = ttk.Scrollbar(log_wrap, command=self._log.yview)
         self._log.configure(yscrollcommand=sb2.set)
         sb2.pack(side="right", fill="y")
@@ -1827,9 +1848,68 @@ class HefestosApp:
         self._pasos_completados = 0
         self._progress["value"] = 0
         self._animacion.iniciar()
+
+        # Decidir si descargar turbo antes de arrancar el hilo
+        if self._turbo_instalado():
+            self._descargar_turbo = False       # ya instalado, pre-check lo omitirá
+        elif self._modo_reparar:
+            self._descargar_turbo = True        # Reparar siempre descarga turbo
+        else:
+            self._descargar_turbo = self._preguntar_turbo_dialog()
+        self._modo_reparar = False
+
         hilo = threading.Thread(target=self._ejecutar_instalacion, daemon=True)
         hilo.start()
         self.root.after(120, self._procesar_cola)
+
+    def _preguntar_turbo_dialog(self) -> bool:
+        """Dialog modal: ¿descargar large-v3-turbo ahora o posponer?"""
+        resultado = [False]
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Modelo turbo HERMES")
+        dlg.configure(bg=BG)
+        dlg.resizable(False, False)
+        dlg.grab_set()
+
+        tk.Label(dlg, text="⚡  Modelo turbo HERMES",
+                 font=("Georgia", 12, "bold"), fg=GOLD, bg=BG).pack(pady=(18, 6))
+        tk.Label(dlg,
+                 text=("¿Descargar el modelo de transcripción de alta calidad?\n\n"
+                       "  large-v3-turbo.pt  —  809 MB\n\n"
+                       "Mejora significativamente el reconocimiento de\n"
+                       "términos médicos en HERMES.\n\n"
+                       "Puede instalarse después con  HEFESTOS → Reparar."),
+                 font=("Georgia", 9), fg=TEXT, bg=BG, justify="center",
+                 wraplength=300).pack(padx=24, pady=(0, 18))
+
+        fr_btn = tk.Frame(dlg, bg=BG)
+        fr_btn.pack(pady=(0, 18))
+
+        def _si():
+            resultado[0] = True
+            dlg.destroy()
+        def _no():
+            resultado[0] = False
+            dlg.destroy()
+
+        tk.Button(fr_btn, text="⬇  Descargar ahora",
+                  font=("Georgia", 10, "bold"),
+                  bg=ACCENT, fg="white", relief="flat",
+                  padx=12, pady=6, cursor="hand2",
+                  command=_si).pack(side="left", padx=10)
+        tk.Button(fr_btn, text="Posponer",
+                  font=("Georgia", 9),
+                  bg=BG2, fg=TEXT, relief="flat",
+                  padx=12, pady=6, cursor="hand2",
+                  command=_no).pack(side="left", padx=10)
+
+        dlg.protocol("WM_DELETE_WINDOW", _no)
+        dlg.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width()  - dlg.winfo_width())  // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - dlg.winfo_height()) // 2
+        dlg.geometry(f"+{x}+{y}")
+        self.root.wait_window(dlg)
+        return resultado[0]
 
     def _procesar_cola(self):
         try:
@@ -1900,15 +1980,19 @@ class HefestosApp:
                         self._emit(tipo="log",
                                     texto=f"  ↓ {paso['asset']}  —  no encontrado, se descargará")
                 elif paso["tipo"] == "descarga" and self._eclipse_dir:
-                    destino = self._eclipse_dir / paso["destino"]
-                    min_bytes = int(paso.get("mb", 0) * 1024 * 1024 * 0.5)
-                    if destino.exists() and destino.stat().st_size > max(4096, min_bytes):
-                        mb = destino.stat().st_size / (1024 * 1024)
+                    if paso.get("id") == "whisper_model_turbo" and not self._descargar_turbo:
                         self._emit(tipo="log",
-                                    texto=f"  ✓ {paso['destino']}  —  ya presente ({mb:.0f} MB), se omite descarga")
+                                    texto=f"  ○ {paso['destino']}  —  pospuesto (usar Reparar para instalar)")
                     else:
-                        self._emit(tipo="log",
-                                    texto=f"  ↓ {paso['destino']}  —  no encontrado, se descargará")
+                        destino = self._eclipse_dir / paso["destino"]
+                        min_bytes = int(paso.get("mb", 0) * 1024 * 1024 * 0.5)
+                        if destino.exists() and destino.stat().st_size > max(4096, min_bytes):
+                            mb = destino.stat().st_size / (1024 * 1024)
+                            self._emit(tipo="log",
+                                        texto=f"  ✓ {paso['destino']}  —  ya presente ({mb:.0f} MB), se omite descarga")
+                        else:
+                            self._emit(tipo="log",
+                                        texto=f"  ↓ {paso['destino']}  —  no encontrado, se descargará")
         self._emit(tipo="log", texto="─────────────────────────────────────────")
 
         # ── Ejecución del manifest ────────────────────────────────────────────
@@ -2032,6 +2116,11 @@ class HefestosApp:
             return self._descargar_modelo_whisper(paso["modelo"], paso.get("mb", "?"))
 
         if tipo == "descarga":
+            # Turbo requiere confirmación explícita del usuario
+            if paso.get("id") == "whisper_model_turbo" and not self._descargar_turbo:
+                self._emit(tipo="log",
+                            texto="Modelo turbo pospuesto — usar HEFESTOS → Reparar para instalar")
+                return "skip"
             # Soporta url_completa (URL directa) o url relativa a OLYMPUS_RAW
             url = paso.get("url_completa") or f"{OLYMPUS_RAW}/{paso['url']}"
             if not self._eclipse_dir:
@@ -2195,7 +2284,28 @@ class HefestosApp:
                     texto=f"Descargando {asset_name}  ({total_mb:.0f} MB)…")
         self._emit(tipo="log", texto=f"  Destino: {destino}")
 
-        # ── 5. Descargar en streaming con progreso cada ~50 MB ───────────────
+        # ── 5. Validar token antes de descargar ──────────────────────────────
+        try:
+            req_check = urllib.request.Request(
+                f"https://api.github.com/repos/{_ECLIPSE_REPO}",
+                headers={**headers_api, "Accept": "application/vnd.github.v3+json"},
+            )
+            opener_check = urllib.request.build_opener(_StripAuthOnRedirect())
+            with opener_check.open(req_check, timeout=10) as r_check:
+                if r_check.status not in (200, 201):
+                    self._emit(tipo="log",
+                                texto=f"WARN: token responde HTTP {r_check.status} — puede estar vencido")
+                else:
+                    self._emit(tipo="log", texto="  Token eclipse_t verificado ✓")
+        except urllib.error.HTTPError as he:
+            self._emit(tipo="log",
+                        texto=f"Token inválido o vencido (HTTP {he.code}) — rotar en github.com/settings/tokens")
+            return False
+        except Exception:
+            pass  # sin conexión para verificar — continuar igual
+
+        # ── 6. Descargar en streaming con progreso cada ~50 MB ───────────────
+        # _StripAuthOnRedirect evita enviar Authorization a S3 tras el 302 de GitHub.
         headers_dl = {
             "Authorization": f"token {token}",
             "Accept": "application/octet-stream",
@@ -2207,8 +2317,9 @@ class HefestosApp:
 
         try:
             destino.parent.mkdir(parents=True, exist_ok=True)
-            req_dl = urllib.request.Request(asset_info["url"], headers=headers_dl)
-            with urllib.request.urlopen(req_dl, timeout=600) as r, \
+            opener_dl  = urllib.request.build_opener(_StripAuthOnRedirect())
+            req_dl     = urllib.request.Request(asset_info["url"], headers=headers_dl)
+            with opener_dl.open(req_dl, timeout=600) as r, \
                  open(destino, "wb") as fh:
                 descargado = 0
                 while True:
@@ -2229,6 +2340,14 @@ class HefestosApp:
                         texto=f"  ✓ {asset_name} descargado — {final_mb:.1f} MB")
             return True
 
+        except urllib.error.HTTPError as he:
+            self._emit(tipo="log",
+                        texto=f"Error HTTP {he.code} descargando {asset_name}: {he.reason}")
+            try:
+                destino.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return False
         except Exception as exc:
             self._emit(tipo="log", texto=f"Error descargando {asset_name}: {exc}")
             try:

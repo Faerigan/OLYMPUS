@@ -10,11 +10,11 @@
       "pasos": [
         {
           "id": "dl_eclipse",
-          "desc": "Descargar ECLIPSE-T.exe (~777 MB)",
+          "desc": "Descargar ECLIPSE-T.exe (~653 MB)",
           "tipo": "github_release",
           "asset": "ECLIPSE-T.exe",
           "destino": "eclipse_dir",
-          "mb": 777
+          "mb": 653
         },
         {
           "id": "dl_helios",
