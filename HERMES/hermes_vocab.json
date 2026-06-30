@@ -1,0 +1,41 @@
+{
+  "_version": "1.0",
+  "_fecha": "28.05.2026",
+  "_fuente": "ECLIPSE-T CESFAM Cerrillos de Tamaya — Dr. Nicolas Vargas",
+  "_nota": "Archivo publico — sin datos de pacientes. Solo vocabulario medico.",
+  "vocabulario_medico": [
+    "enalapril", "losartan", "metformina", "empagliflozina", "dapagliflozina",
+    "carvedilol", "amlodipino", "furosemida", "espironolactona", "hidroclorotiazida",
+    "atorvastatina", "rosuvastatina", "aspirina", "clopidogrel",
+    "omeprazol", "pantoprazol", "ranitidina",
+    "amoxicilina", "amoxicilina-acido clavulanico", "azitromicina", "ciprofloxacino",
+    "fluoxetina", "sertralina", "escitalopram", "alprazolam", "clonazepam",
+    "levotiroxina", "insulina", "glibenclamida",
+    "budesonida", "salbutamol", "ipratropio", "montelukast",
+    "prednisona", "betametasona", "hidrocortisona",
+    "tramadol", "paracetamol", "ibuprofeno", "naproxeno", "ketoprofeno",
+    "cesfam", "ecicep", "pcic", "mais", "sapu", "pscv", "ges", "auge",
+    "cerrillos de tamaya", "ovalle", "servicio de salud coquimbo",
+    "control satelite", "ingreso ecicep", "preingreso", "control adulto",
+    "empam", "empa", "pap", "mamografia",
+    "hba1c", "hemoglobina glicosilada", "glicemia", "creatinina",
+    "microalbuminuria", "rac", "vfg", "filtrado glomerular",
+    "hipertension arterial", "diabetes mellitus", "insuficiencia cardiaca",
+    "enfermedad renal cronica", "hipotiroidismo", "dislipidemia",
+    "epoc", "asma bronquial", "depresion", "ansiedad",
+    "phq-9", "audit", "gds-15", "barthel", "ersc", "framingham"
+  ],
+  "correcciones": {
+    "enalaprl": "enalapril",
+    "metormin": "metformina",
+    "losartal": "losartan",
+    "empaglif": "empagliflozina",
+    "carbedilol": "carvedilol",
+    "hidroclorotiasida": "hidroclorotiazida",
+    "atorvastatina": "atorvastatina",
+    "amoxicillin": "amoxicilina",
+    "hba uno c": "hba1c",
+    "hemoglobina glico": "hemoglobina glicosilada"
+  },
+  "triggers_nuevos": []
+}
