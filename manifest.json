@@ -31,12 +31,12 @@
     }
   },
   "archivos": {
-    "hermes_vocab": "hermes/hermes_vocab.json",
-    "hermes_glossary_patch": "hermes/hermes_glossary_patch.json",
-    "cie10_updates": "eclipse/cie10_updates.csv",
-    "arsenal_updates": "eclipse/arsenal_updates.csv",
-    "install_manifest": "hefestos/install_manifest.json",
-    "requirements": "hefestos/requirements.txt"
+    "hermes_vocab": "HERMES/hermes_vocab.json",
+    "hermes_glossary_patch": "HERMES/hermes_glossary_patch.json",
+    "cie10_updates": "ECLIPSE-T/cie10_updates.csv",
+    "arsenal_updates": "ECLIPSE-T/arsenal_updates.csv",
+    "install_manifest": "HEFESTOS/install_manifest.json",
+    "requirements": "HEFESTOS/requirements.txt"
   },
   "alertas": []
 }
