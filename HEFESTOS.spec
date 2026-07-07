@@ -6,6 +6,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('install_manifest.json', '.'),
+        ('manifest.json', '.'),
         ('hefestos_key_validator.py', '.'),
         ('Resources/HEFESTOS.png',        'Resources'),
         ('Resources/HEFESTOS.ico',        'Resources'),

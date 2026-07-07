@@ -68,7 +68,7 @@ def resource_path(rel: str) -> str:
 
 OLYMPUS_RAW   = "https://raw.githubusercontent.com/Faerigan/OLYMPUS/main"
 _ECLIPSE_REPO = "Faerigan/eclipse-t"   # repo privado — releases con los EXEs
-_HEFESTOS_VERSION = "2.4"
+_HEFESTOS_VERSION = "2.5"
 
 
 def _cargar_github_token() -> str:
@@ -163,6 +163,28 @@ _DEFAULTS_MAESTRA = {
 
 def _generar_id(nombre: str) -> str:
     return hashlib.sha256(nombre.encode()).hexdigest()[:8]
+
+
+def _ver_tuple(v: str) -> tuple:
+    """Convierte '3.3.0' → (3,3,0) para comparación numérica. Tolera basura."""
+    partes = []
+    for p in str(v).strip().split("."):
+        num = "".join(ch for ch in p if ch.isdigit())
+        partes.append(int(num) if num else 0)
+    return tuple(partes)
+
+
+def _version_mayor(remota: str, instalada: str) -> bool:
+    """True si `remota` es estrictamente MAYOR que `instalada`.
+    Evita avisos de 'actualización' cuando el equipo va por delante del repo."""
+    if not remota:
+        return False
+    if not instalada:
+        return True
+    try:
+        return _ver_tuple(remota) > _ver_tuple(instalada)
+    except Exception:
+        return remota != instalada
 
 
 def _cargar_logo_tk(path: "str | Path | None", size: int = 80) -> "tk.PhotoImage | None":
@@ -748,7 +770,7 @@ class HefestosApp:
 
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("HEFESTOS v2.0 — Instalador Ecosistema OLYMPUS")
+        self.root.title(f"HEFESTOS v{_HEFESTOS_VERSION} — Instalador Ecosistema OLYMPUS")
         self.root.configure(bg=BG)
         self.root.resizable(True, True)
         self.root.withdraw()  # ocultar hasta centrar
@@ -825,10 +847,15 @@ class HefestosApp:
         _dibujar_columnas(self._cv_der, 44, h)
 
     def _turbo_instalado(self) -> bool:
-        """Verifica si el modelo Whisper turbo (large-v3-turbo.pt) está instalado."""
+        """Verifica si el modelo Whisper turbo (large-v3-turbo.pt) está instalado.
+
+        v8.59+: ubicación canónica = raíz del install dir (junto a ECLIPSE-T.exe,
+        donde hermes_voice.py lo busca primero). Acepta modelos/ por retrocompat.
+        """
         if not self._eclipse_dir:
             return False
-        return (self._eclipse_dir / "modelos" / "large-v3-turbo.pt").exists()
+        return ((self._eclipse_dir / "large-v3-turbo.pt").exists() or
+                (self._eclipse_dir / "modelos" / "large-v3-turbo.pt").exists())
 
     def _mostrar(self, frame: tk.Frame):
         for f in (self._f_inicio, self._f_reconfig, self._f_config,
@@ -877,7 +904,7 @@ class HefestosApp:
 
         tk.Label(fr, text="HEFESTOS", font=("Georgia", 24, "bold"),
                  fg=GOLD, bg=BG).pack(pady=(8, 0))
-        tk.Label(fr, text="Instalador Ecosistema OLYMPUS  ·  v2.0",
+        tk.Label(fr, text=f"Instalador Ecosistema OLYMPUS  ·  v{_HEFESTOS_VERSION}",
                  font=("Georgia", 10), fg=DIM, bg=BG).pack()
         tk.Label(fr, text="CESFAM Cerrillos de Tamaya",
                  font=("Georgia", 9), fg=GRAY, bg=BG).pack(pady=(2, 10))
@@ -1370,7 +1397,7 @@ class HefestosApp:
         _chk(var_config, "Eliminar configuración del centro  (centros.dat, .key, config_centro.json)")
         _chk(var_exes,   "Eliminar ejecutables  (ECLIPSE-T.exe, helios.exe, geckodriver.exe)")
         _chk(var_modelo, "Eliminar modelo de voz base  (modelos/base.pt  ≈ 139 MB)")
-        turbo_txt = ("⚡ Eliminar modelo turbo instalado  (modelos/large-v3-turbo.pt  ≈ 809 MB)"
+        turbo_txt = ("⚡ Eliminar modelo turbo instalado  (large-v3-turbo.pt  ≈ 809 MB)"
                      if self._turbo_instalado()
                      else "○ Modelo turbo no instalado  (nada que eliminar)")
         _chk(var_turbo, turbo_txt, color=(DIM if not self._turbo_instalado() else TEXT))
@@ -1464,6 +1491,7 @@ class HefestosApp:
             _rm(ed / "modelos" / "small.pt", "modelos/small.pt")
 
         if turbo:
+            _rm(ed / "large-v3-turbo.pt",             "large-v3-turbo.pt")
             _rm(ed / "modelos" / "large-v3-turbo.pt", "modelos/large-v3-turbo.pt")
 
         if datos:
@@ -1963,6 +1991,100 @@ class HefestosApp:
             return self._eclipse_dir / asset
         return _BASE_DIR / asset
 
+    # ── Adquisición de ejecutables (local-first + GitHub fallback) ────────────
+    # Directorios donde HEFESTOS busca copias locales de los .exe (pendrive/bundle).
+    _BUNDLE_CANDIDATOS = [
+        Path("E:/Distribution_Bundle_OLYMPUS"),
+        Path("D:/Distribution_Bundle_OLYMPUS"),
+    ]
+
+    @staticmethod
+    def _dir_hefestos() -> Path:
+        """Carpeta donde vive HEFESTOS (exe congelado o .py). Es la 'fuente pendrive'."""
+        return (Path(sys.executable).parent
+                if getattr(sys, "frozen", False) else _BASE_DIR)
+
+    @staticmethod
+    def _sha256(path: Path, _buf: int = 1024 * 1024) -> str:
+        h = hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(_buf), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    def _buscar_fuente_local(self, asset: str, destino: Path) -> "Path | None":
+        """
+        Busca una copia local de `asset` (junto a HEFESTOS o en bundles conocidos)
+        que NO sea el propio destino y pese > 1 MB. Devuelve la primera encontrada.
+        Esto habilita instalar/actualizar por pendrive sin internet (rural-first).
+        """
+        try:
+            destino_res = destino.resolve()
+        except Exception:
+            destino_res = destino
+        vistos: set = set()
+        candidatos = [self._dir_hefestos()] + list(self._BUNDLE_CANDIDATOS)
+        if self._eclipse_dir:
+            candidatos.append(self._eclipse_dir)
+        for base in candidatos:
+            try:
+                cand = (base / asset).resolve()
+            except Exception:
+                continue
+            if cand in vistos:
+                continue
+            vistos.add(cand)
+            try:
+                if (cand != destino_res and cand.exists()
+                        and cand.stat().st_size > 1_048_576):
+                    return cand
+            except Exception:
+                continue
+        return None
+
+    def _adquirir_exe(self, asset: str, destino: Path, mb_est) -> "bool | str":
+        """
+        Instala/actualiza un ejecutable OLYMPUS. Prioridad (rural-first):
+          1. Copia local (pendrive/bundle) — si difiere del instalado (hash), copiar.
+          2. Descarga GitHub release — solo si falta el exe y no hay copia local.
+          3. Si ya está y no hay copia local más nueva → mantener (✓).
+        El criterio es HASH/versión, no mera existencia → permite actualizaciones.
+        """
+        fuente = self._buscar_fuente_local(asset, destino)
+
+        if fuente:
+            try:
+                if destino.exists() and self._sha256(fuente) == self._sha256(destino):
+                    mb = destino.stat().st_size / (1024 * 1024)
+                    self._emit(tipo="log",
+                               texto=f"{asset} ya actualizado ({mb:.0f} MB, idéntico a copia local) — se omite")
+                    return True
+                destino.parent.mkdir(parents=True, exist_ok=True)
+                accion = "Actualizando" if destino.exists() else "Instalando"
+                self._emit(tipo="log", texto=f"{accion} {asset} desde copia local:")
+                self._emit(tipo="log", texto=f"  {fuente}")
+                # Copia atómica: escribir a .tmp y renombrar (evita exe corrupto si se corta)
+                tmp = destino.with_suffix(destino.suffix + ".tmp")
+                shutil.copy2(str(fuente), str(tmp))
+                os.replace(str(tmp), str(destino))
+                mb = destino.stat().st_size / (1024 * 1024)
+                self._emit(tipo="log", texto=f"  ✓ {asset} instalado ({mb:.1f} MB)")
+                return True
+            except Exception as exc:
+                self._emit(tipo="log",
+                           texto=f"Error copiando {asset} desde copia local: {exc}")
+                # cae a descarga si el exe no está presente
+
+        # Sin copia local (o falló la copia)
+        if destino.exists() and destino.stat().st_size > 1_048_576:
+            mb = destino.stat().st_size // (1024 * 1024)
+            self._emit(tipo="log",
+                       texto=f"{asset} presente ({mb} MB) — sin copia local más nueva, se mantiene")
+            return True
+        self._emit(tipo="log",
+                   texto=f"{asset} no está presente y no hay copia local — intentando descarga GitHub…")
+        return self._descargar_release_github(asset, destino, mb_est)
+
     def _ejecutar_instalacion(self):
         # ── Pre-check: estado de ejecutables y modelos antes de empezar ─────
         self._emit(tipo="log", texto="── Verificación previa ──────────────────")
@@ -1972,13 +2094,18 @@ class HefestosApp:
                     destino = self._get_exe_destino(
                         paso["asset"], paso.get("destino", "eclipse_dir")
                     )
-                    if destino and destino.exists() and destino.stat().st_size > 1_048_576:
+                    fuente = (self._buscar_fuente_local(paso["asset"], destino)
+                              if destino else None)
+                    if fuente:
+                        self._emit(tipo="log",
+                                    texto=f"  ↑ {paso['asset']}  —  copia local disponible, se instalará/actualizará")
+                    elif destino and destino.exists() and destino.stat().st_size > 1_048_576:
                         mb = destino.stat().st_size // (1024 * 1024)
                         self._emit(tipo="log",
-                                    texto=f"  ✓ {paso['asset']}  —  ya presente ({mb} MB), se omite descarga")
+                                    texto=f"  ✓ {paso['asset']}  —  ya presente ({mb} MB), sin copia local más nueva")
                     else:
                         self._emit(tipo="log",
-                                    texto=f"  ↓ {paso['asset']}  —  no encontrado, se descargará")
+                                    texto=f"  ↓ {paso['asset']}  —  no encontrado, se descargará de GitHub")
                 elif paso["tipo"] == "descarga" and self._eclipse_dir:
                     if paso.get("id") == "whisper_model_turbo" and not self._descargar_turbo:
                         self._emit(tipo="log",
@@ -2011,80 +2138,9 @@ class HefestosApp:
                     self._emit(tipo="paso_ok", id=paso["id"])
                 else:
                     self._emit(tipo="paso_error", id=paso["id"])
-        self._prewarm_eclipse()
+        # v2.5: pre-extracción de ECLIPSE eliminada — el exe turbo (229 MB) ya
+        # arranca rápido y el prewarm dependía de `time` (no importado) → NameError.
         self._emit(tipo="fin")
-
-    def _prewarm_eclipse(self) -> None:
-        """
-        Lanza ECLIPSE-T.exe silenciosamente para que PyInstaller extraiga el
-        bundle a %TEMP% la primera vez. La próxima apertura abre en ~5 seg.
-        Se omite si ya hay una instancia corriendo o si el exe no existe.
-        """
-        import socket as _s
-        exe = (self._eclipse_dir / "ECLIPSE-T.exe") if self._eclipse_dir else None
-        if not exe or not exe.exists():
-            return
-
-        # Comprobar si ya hay una instancia de ECLIPSE corriendo (puerto 47291)
-        try:
-            chk = _s.socket(_s.AF_INET, _s.SOCK_STREAM)
-            chk.setsockopt(_s.SOL_SOCKET, _s.SO_REUSEADDR, 0)
-            chk.bind(("127.0.0.1", 47291))
-            chk.close()
-        except OSError:
-            self._emit(tipo="log", texto="  Pre-extracción omitida — ECLIPSE ya está en ejecución.")
-            return
-
-        self._emit(tipo="estado", texto="Preparando primera ejecución…")
-        self._emit(tipo="log",    texto="── Pre-extracción del bundle PyInstaller ──────")
-        self._emit(tipo="log",    texto="  Iniciando ECLIPSE-T para cachear archivos temporales…")
-        self._emit(tipo="log",    texto="  (Primera apertura: ~60 seg  →  siguientes: ~5 seg)")
-
-        try:
-            proc = subprocess.Popen(
-                [str(exe)], cwd=str(self._eclipse_dir),
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
-        except Exception as exc:
-            self._emit(tipo="log", texto=f"  No se pudo iniciar ECLIPSE-T: {exc}")
-            return
-
-        # Esperar a que ECLIPSE adquiera el lock del puerto 47291
-        # (significa que el bundle está extraído y Python arrancó)
-        deadline = time.time() + 100
-        listo = False
-        while time.time() < deadline:
-            if proc.poll() is not None:
-                self._emit(tipo="log", texto="  ECLIPSE terminó antes de completar la extracción.")
-                return
-            try:
-                chk = _s.socket(_s.AF_INET, _s.SOCK_STREAM)
-                chk.setsockopt(_s.SOL_SOCKET, _s.SO_REUSEADDR, 0)
-                chk.bind(("127.0.0.1", 47291))
-                chk.close()
-            except OSError:
-                listo = True
-                break
-            time.sleep(2)
-
-        # Matar árbol completo: bootloader PyInstaller (padre) + proceso Python hijo
-        try:
-            subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                capture_output=True, timeout=5,
-            )
-        except Exception:
-            proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-
-        if listo:
-            self._emit(tipo="log", texto="  Bundle cacheado. ECLIPSE abrirá casi instantáneamente.")
-        else:
-            self._emit(tipo="log", texto="  Tiempo agotado — primer inicio puede tardar ~60 seg.")
-        self._emit(tipo="log", texto="───────────────────────────────────────────────")
 
     def _ejecutar_paso(self, paso: dict) -> bool:
         tipo = paso["tipo"]
@@ -2154,12 +2210,13 @@ class HefestosApp:
             asset    = paso["asset"]
             dest_key = paso.get("destino", "eclipse_dir")
             mb_est   = paso.get("mb", "?")
-            # Todos los ejecutables van en el mismo directorio que ECLIPSE-T.exe
-            if dest_key in ("eclipse_dir", "helios_dir"):
-                destino = self._eclipse_dir / asset          # type: ignore
-            else:
-                destino = _BASE_DIR / asset
-            return self._descargar_release_github(asset, destino, mb_est)
+            destino  = self._get_exe_destino(asset, dest_key)
+            if destino is None:
+                self._emit(tipo="log",
+                           texto=f"⚠ No se pudo determinar directorio de instalación — omitiendo {asset}")
+                return False
+            # Local-first: copia desde pendrive/bundle si difiere; GitHub como respaldo.
+            return self._adquirir_exe(asset, destino, mb_est)
 
         self._emit(tipo="log", texto=f"Tipo desconocido: {tipo}")
         return False
@@ -2511,16 +2568,34 @@ class HefestosApp:
         except Exception:
             return {}
 
+    def _versiones_bundle(self) -> dict:
+        """Versiones canónicas del bundle actual (manifest.json junto a HEFESTOS).
+        Es la fuente de verdad de qué versión instala este HEFESTOS."""
+        try:
+            mv = json.loads((_BASE_DIR / "manifest.json").read_text("utf-8")).get("versiones", {})
+        except Exception:
+            mv = {}
+        return {
+            "eclipse":  mv.get("eclipse_t", {}).get("version", ""),
+            "helios":   mv.get("helios",    {}).get("version", ""),
+            "hefestos": mv.get("hefestos",  {}).get("version", _HEFESTOS_VERSION),
+        }
+
     def _escribir_versiones_instaladas(self):
-        """Registra versiones tras instalación/reparación exitosa."""
+        """Registra versiones tras instalación/reparación exitosa.
+        Toma las versiones del manifest.json bundleado (no hardcode) para que el
+        chequeo de actualizaciones compare contra lo realmente instalado."""
         if not self._eclipse_dir:
             return
         ruta = self._eclipse_dir / "resources" / "olympus_installed.json"
         try:
+            ruta.parent.mkdir(parents=True, exist_ok=True)
             import datetime as _dt
+            vers = self._versiones_bundle()
             data = {
-                "eclipse": "3.0",
-                "helios":  "3.3.0",
+                "eclipse":  vers["eclipse"]  or "3.0",
+                "helios":   vers["helios"]   or "3.3.0",
+                "hefestos": vers["hefestos"] or _HEFESTOS_VERSION,
                 "installed_by": f"HEFESTOS v{_HEFESTOS_VERSION}",
                 "date": _dt.date.today().isoformat(),
             }
@@ -2528,6 +2603,65 @@ class HefestosApp:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception:
             pass
+
+    # ── Auto-actualización de HEFESTOS ────────────────────────────────────────
+
+    def _obtener_hefestos_nuevo(self, nuevo: Path) -> bool:
+        """Consigue una copia nueva de HEFESTOS.exe en `nuevo` (nombre versionado).
+        Local-first: busca una HEFESTOS.exe DISTINTA a la que corre (pendrive/bundle);
+        si no hay, descarga de GitHub. Devuelve True si `nuevo` quedó listo."""
+        actual = Path(sys.executable) if getattr(sys, "frozen", False) else None
+        actual_hash = None
+        try:
+            if actual and actual.exists():
+                actual_hash = self._sha256(actual)
+        except Exception:
+            actual_hash = None
+        for base in [self._dir_hefestos()] + list(self._BUNDLE_CANDIDATOS):
+            cand = base / "HEFESTOS.exe"
+            try:
+                if not (cand.exists() and cand.stat().st_size > 1_048_576):
+                    continue
+                if actual and cand.resolve() == actual.resolve():
+                    continue  # es el propio exe en ejecución
+                if actual_hash and self._sha256(cand) == actual_hash:
+                    continue  # misma versión, no aporta
+                shutil.copy2(str(cand), str(nuevo))
+                return True
+            except Exception:
+                continue
+        # Sin copia local más nueva → descarga GitHub (respaldo)
+        return self._descargar_release_github("HEFESTOS.exe", nuevo, 25) is True
+
+    def _lanzar_swap_hefestos(self, nuevo: Path) -> bool:
+        """Lanza un .bat detached que espera a que HEFESTOS cierre, reemplaza el
+        exe en ejecución por `nuevo` y relanza. Devuelve True si el swap se lanzó."""
+        if not getattr(sys, "frozen", False):
+            return False
+        actual = Path(sys.executable)
+        try:
+            bat = actual.parent / "_hefestos_update.bat"
+            pid = os.getpid()
+            contenido = (
+                "@echo off\r\n"
+                "setlocal\r\n"
+                f'set "TARGET={actual}"\r\n'
+                f'set "NUEVO={nuevo}"\r\n'
+                ":wait\r\n"
+                "ping 127.0.0.1 -n 2 >nul\r\n"
+                f'tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul && goto wait\r\n'
+                'move /y "%NUEVO%" "%TARGET%" >nul\r\n'
+                'start "" "%TARGET%"\r\n'
+                'del "%~f0"\r\n'
+            )
+            bat.write_text(contenido, encoding="utf-8")
+            CREATE_NO_WINDOW = 0x08000000
+            subprocess.Popen(["cmd", "/c", str(bat)], creationflags=CREATE_NO_WINDOW)
+            # Cerrar HEFESTOS para liberar el .exe y que el .bat pueda reemplazarlo
+            self.root.after(300, self._cerrar)
+            return True
+        except Exception:
+            return False
 
     # ── Startup: chequeo de versión OLYMPUS ──────────────────────────────────
 
@@ -2555,12 +2689,14 @@ class HefestosApp:
                 e_inst = instaladas.get("eclipse", "")
                 h_inst = instaladas.get("helios",  "")
 
+                # Solo se avisa si el repo va POR DELANTE de lo instalado (>),
+                # nunca a la baja (evita prompts falsos tras un build local nuevo).
                 updates = []
-                if v_hefestos and v_hefestos != _HEFESTOS_VERSION:
+                if _version_mayor(v_hefestos, _HEFESTOS_VERSION):
                     updates.append(("HEFESTOS", v_hefestos, "hefestos"))
-                if v_eclipse and e_inst and v_eclipse != e_inst:
+                if e_inst and _version_mayor(v_eclipse, e_inst):
                     updates.append(("ECLIPSE-T", v_eclipse, "eclipse"))
-                if v_helios and h_inst and v_helios != h_inst:
+                if h_inst and _version_mayor(v_helios, h_inst):
                     updates.append(("HELIOS", v_helios, "helios"))
 
                 if updates:
@@ -2662,26 +2798,33 @@ class HefestosApp:
         btns.pack()
 
         def _descargar():
-            btn_dl.config(state="disabled", text="Descargando…")
+            btn_dl.config(state="disabled", text="Obteniendo…")
             dlg.update()
             dest_dir = (Path(sys.executable).parent
                         if getattr(sys, "frozen", False) else _BASE_DIR)
-            destino  = dest_dir / f"HEFESTOS_v{version_nueva}.exe"
+            nuevo = dest_dir / f"HEFESTOS_v{version_nueva}.exe"
 
             def _hilo():
-                ok = self._descargar_release_github("HEFESTOS.exe", destino, 25)
+                # Local-first: copia desde pendrive/bundle; GitHub como respaldo.
+                ok = self._obtener_hefestos_nuevo(nuevo)
+                if ok is True and getattr(sys, "frozen", False):
+                    # Auto-swap: reemplaza el exe en ejecución y relanza.
+                    if self._lanzar_swap_hefestos(nuevo):
+                        return  # el proceso se cerrará; el .bat hace el resto
                 if ok is True:
                     self.root.after(0, lambda: messagebox.showinfo(
-                        "Descarga completa",
-                        f"HEFESTOS v{version_nueva} descargado en:\n{destino}\n\n"
+                        "Actualización lista",
+                        f"HEFESTOS v{version_nueva} guardado en:\n{nuevo}\n\n"
                         "Cierre esta ventana y use el nuevo ejecutable.",
                         parent=dlg))
                 else:
                     self.root.after(0, lambda: messagebox.showwarning(
-                        "Error de descarga",
-                        "No se pudo descargar la actualización automáticamente.\n"
-                        "Descárguela manualmente desde github.com/Faerigan/eclipse-t",
+                        "No se pudo actualizar",
+                        "No se encontró copia local ni se pudo descargar.\n"
+                        "Copie el nuevo HEFESTOS.exe junto a este, o descárguelo\n"
+                        "desde github.com/Faerigan/eclipse-t",
                         parent=dlg))
+                self.root.after(0, lambda: btn_dl.config(state="normal", text="  Descargar ahora  ↓  "))
                 self.root.after(0, dlg.destroy)
 
             threading.Thread(target=_hilo, daemon=True).start()
