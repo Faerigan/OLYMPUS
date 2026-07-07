@@ -878,9 +878,14 @@ class HefestosApp:
     # ── Manifiesto ───────────────────────────────────────────────────────────
 
     def _cargar_manifest(self) -> dict:
-        path = _BASE_DIR / "install_manifest.json"
-        with open(path, encoding="utf-8") as f:
-            return json.load(f)
+        # Canónico en subcarpeta HEFESTOS/ (layout OLYMPUS, sin duplicado en raíz).
+        # En el exe congelado el .spec lo bundlea a la raíz de _MEIPASS.
+        for cand in (_BASE_DIR / "install_manifest.json",
+                     _BASE_DIR / "HEFESTOS" / "install_manifest.json"):
+            if cand.exists():
+                with open(cand, encoding="utf-8") as f:
+                    return json.load(f)
+        raise FileNotFoundError("install_manifest.json no encontrado (raíz ni HEFESTOS/)")
 
     # ── Pantalla 1: Inicio ───────────────────────────────────────────────────
 

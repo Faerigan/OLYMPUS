@@ -63,7 +63,8 @@ def verificar() -> bool:
     titulo("Verificando archivos")
     requeridos = [
         "hefestos.py", "hefestos_key_validator.py",
-        "install_manifest.json",
+        "HEFESTOS/install_manifest.json",
+        "manifest.json",
         "Resources/HEFESTOS.png", "Resources/HEFESTOS.ico",
     ]
     for rel in requeridos:
