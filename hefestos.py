@@ -67,57 +67,42 @@ def resource_path(rel: str) -> str:
     return str(_BASE_DIR / rel)
 
 OLYMPUS_RAW   = "https://raw.githubusercontent.com/Faerigan/OLYMPUS/main"
-_ECLIPSE_REPO = "Faerigan/eclipse-t"   # repo privado — releases con los EXEs
-_HEFESTOS_VERSION = "2.5"
+_ECLIPSE_REPO = "Faerigan/OLYMPUS"   # repo PÚBLICO — releases con los EXEs (v2.6)
+_HEFESTOS_VERSION = "2.6"
+
+# Token master — SOLO para escritura de SCRAP_METAL.csv en OLYMPUS.
+# Lectura de releases/manifest es del repo público → NO requiere token.
+# Nunca hardcodear: se lee en runtime del archivo local del dev, ausente en pendrive de cliente.
+_MASTER_TOKEN_KEY = "Lord-Faerigan-true-main-token"
+
+
+def _cargar_master_token() -> str:
+    """Lee el token maestro Lord-Faerigan-true-main-token de un JSON local.
+    Rutas: E:/Private/.tokens.txt (dev), D:/Private/.tokens.txt (fallback),
+    _BASE_DIR/../Private/.tokens.txt (relativa al exe). Formato JSON:
+        {"Lord-Faerigan-true-main-token": "ghp_xxx"}
+    Sin token disponible → SCRAP_METAL cae a registro local (_registrar_local)."""
+    import json as _json
+    for tokens_path in (
+        Path("E:/Private/.tokens.txt"),
+        Path("D:/Private/.tokens.txt"),
+        _BASE_DIR.parent / "Private" / ".tokens.txt",
+        _BASE_DIR.parent.parent / "Private" / ".tokens.txt",
+    ):
+        try:
+            if tokens_path.exists():
+                data = _json.loads(tokens_path.read_text("utf-8"))
+                tok = data.get(_MASTER_TOKEN_KEY, "")
+                if tok:
+                    return tok
+        except Exception:
+            pass
+    return ""
 
 
 def _cargar_github_token() -> str:
-    """Token de escritura para OLYMPUS (SCRAP_METAL.csv)."""
-    for tokens_path in (
-        Path("D:/ECLIPSE/.tokens"),
-        Path("E:/ECLIPSE/.tokens"),
-        _BASE_DIR.parent / "ECLIPSE" / ".tokens",
-    ):
-        try:
-            if tokens_path.exists():
-                import json as _json
-                tok = _json.loads(tokens_path.read_text("utf-8")).get("olympus", "")
-                if tok:
-                    return tok
-        except Exception:
-            pass
-    try:
-        import importlib, sys as _sys
-        _sys.path.insert(0, str(_BASE_DIR))
-        mod = importlib.import_module("hefestos_key_validator")
-        return getattr(mod, "_GITHUB_TOKEN", "") or ""
-    except Exception:
-        return ""
-
-
-def _cargar_eclipse_token() -> str:
-    """Token de lectura para Faerigan/eclipse-t (repo privado, releases con EXEs)."""
-    for tokens_path in (
-        Path("D:/ECLIPSE/.tokens"),
-        Path("E:/ECLIPSE/.tokens"),
-        _BASE_DIR.parent / "ECLIPSE" / ".tokens",
-    ):
-        try:
-            if tokens_path.exists():
-                import json as _json
-                data = _json.loads(tokens_path.read_text("utf-8"))
-                tok = data.get("eclipse_t", "") or data.get("olympus", "")
-                if tok:
-                    return tok
-        except Exception:
-            pass
-    try:
-        import importlib, sys as _sys
-        _sys.path.insert(0, str(_BASE_DIR))
-        mod = importlib.import_module("hefestos_key_validator")
-        return getattr(mod, "_GITHUB_TOKEN", "") or ""
-    except Exception:
-        return ""
+    """Token de escritura para OLYMPUS (SCRAP_METAL.csv). Sin hardcode."""
+    return _cargar_master_token()
 
 # ── Paleta crema / arquitectura griega ───────────────────────────────────────
 BG      = "#FAF6EE"   # fondo crema cálido
@@ -1400,7 +1385,7 @@ class HefestosApp:
                            activebackground=BG).pack(anchor="w", pady=2)
 
         _chk(var_config, "Eliminar configuración del centro  (centros.dat, .key, config_centro.json)")
-        _chk(var_exes,   "Eliminar ejecutables  (ECLIPSE-T.exe, helios.exe, geckodriver.exe)")
+        _chk(var_exes,   "Eliminar ejecutables  (ECLIPSE-T.exe, HELIOS.exe, KARONTE.exe, geckodriver.exe)")
         _chk(var_modelo, "Eliminar modelo de voz base  (modelos/base.pt  ≈ 139 MB)")
         turbo_txt = ("⚡ Eliminar modelo turbo instalado  (large-v3-turbo.pt  ≈ 809 MB)"
                      if self._turbo_instalado()
@@ -1488,6 +1473,7 @@ class HefestosApp:
 
         if exes:
             for nombre in ("ECLIPSE-T.exe", "helios.exe", "HELIOS.exe",
+                            "KARONTE.exe",
                             "geckodriver.exe", "HADES.exe"):
                 _rm(ed / nombre, nombre)
 
@@ -1991,8 +1977,9 @@ class HefestosApp:
         """Devuelve la ruta absoluta donde se instalará un asset github_release."""
         if not self._eclipse_dir:
             return None
-        if dest_key in ("eclipse_dir", "helios_dir"):
-            # Ambos ejecutables van en el mismo directorio que ECLIPSE-T.exe
+        # Todos los ejecutables OLYMPUS conviven en el mismo directorio de
+        # instalación (comparten geckodriver, config_centro.json, etc.).
+        if dest_key in ("eclipse_dir", "helios_dir", "karonte_dir"):
             return self._eclipse_dir / asset
         return _BASE_DIR / asset
 
@@ -2285,8 +2272,8 @@ class HefestosApp:
     def _descargar_release_github(self, asset_name: str, destino: Path,
                                     mb_est) -> "bool | str":
         """
-        Descarga un asset del último release del repo privado eclipse-t.
-        Usa el token de hefestos_key_validator._GITHUB_TOKEN.
+        Descarga un asset del último release del repo PÚBLICO Faerigan/OLYMPUS.
+        Sin token — v2.6 migró releases de repo privado a público (OLYMPUS).
         Salta si el archivo ya existe y tiene tamaño razonable (> 1 MB).
         """
         import json as _json
@@ -2297,21 +2284,11 @@ class HefestosApp:
                         texto=f"{asset_name} ya presente ({destino.stat().st_size // (1024*1024)} MB) — omitiendo descarga")
             return True  # Mostrar ✓ verde, no – gris
 
-        # ── 2. Token (eclipse_t — acceso a repo privado) ─────────────────────
-        token = _cargar_eclipse_token()
-        if not token:
-            self._emit(tipo="log",
-                        texto=f"WARN: sin token eclipse_t — {asset_name} no descargado automáticamente")
-            self._emit(tipo="log",
-                        texto=f"  Copie {asset_name} manualmente a: {destino.parent}")
-            return "skip"
-
-        # ── 3. Obtener info del último release ───────────────────────────────
+        # ── 2. Obtener info del último release (repo público, sin token) ─────
         api_url = f"https://api.github.com/repos/{_ECLIPSE_REPO}/releases/latest"
         headers_api = {
-            "Authorization": f"token {token}",
             "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "HEFESTOS-installer/2.0",
+            "User-Agent": "HEFESTOS-installer/2.6",
         }
         self._emit(tipo="log", texto=f"Consultando releases de {_ECLIPSE_REPO}…")
         try:
@@ -2325,7 +2302,7 @@ class HefestosApp:
         tag = release.get("tag_name", "desconocida")
         self._emit(tipo="log", texto=f"Release encontrado: {tag}")
 
-        # ── 4. Localizar asset ───────────────────────────────────────────────
+        # ── 3. Localizar asset ───────────────────────────────────────────────
         asset_info = None
         for a in release.get("assets", []):
             if a["name"] == asset_name:
@@ -2346,32 +2323,11 @@ class HefestosApp:
                     texto=f"Descargando {asset_name}  ({total_mb:.0f} MB)…")
         self._emit(tipo="log", texto=f"  Destino: {destino}")
 
-        # ── 5. Validar token antes de descargar ──────────────────────────────
-        try:
-            req_check = urllib.request.Request(
-                f"https://api.github.com/repos/{_ECLIPSE_REPO}",
-                headers={**headers_api, "Accept": "application/vnd.github.v3+json"},
-            )
-            opener_check = urllib.request.build_opener(_StripAuthOnRedirect())
-            with opener_check.open(req_check, timeout=10) as r_check:
-                if r_check.status not in (200, 201):
-                    self._emit(tipo="log",
-                                texto=f"WARN: token responde HTTP {r_check.status} — puede estar vencido")
-                else:
-                    self._emit(tipo="log", texto="  Token eclipse_t verificado ✓")
-        except urllib.error.HTTPError as he:
-            self._emit(tipo="log",
-                        texto=f"Token inválido o vencido (HTTP {he.code}) — rotar en github.com/settings/tokens")
-            return False
-        except Exception:
-            pass  # sin conexión para verificar — continuar igual
-
-        # ── 6. Descargar en streaming con progreso cada ~50 MB ───────────────
-        # _StripAuthOnRedirect evita enviar Authorization a S3 tras el 302 de GitHub.
+        # ── 4. Descargar en streaming (repo público — sin Authorization) ─────
+        # Uso browser_download_url para simple GET público sin cabeceras API.
         headers_dl = {
-            "Authorization": f"token {token}",
             "Accept": "application/octet-stream",
-            "User-Agent": "HEFESTOS-installer/2.0",
+            "User-Agent": "HEFESTOS-installer/2.6",
         }
         CHUNK      = 1024 * 1024          # 1 MB por lectura
         LOG_CADA   = 50 * 1024 * 1024     # log cada 50 MB
@@ -2380,7 +2336,9 @@ class HefestosApp:
         try:
             destino.parent.mkdir(parents=True, exist_ok=True)
             opener_dl  = urllib.request.build_opener(_StripAuthOnRedirect())
-            req_dl     = urllib.request.Request(asset_info["url"], headers=headers_dl)
+            # Repo público: browser_download_url es un GET directo sin cabeceras API.
+            dl_url = asset_info.get("browser_download_url") or asset_info["url"]
+            req_dl     = urllib.request.Request(dl_url, headers=headers_dl)
             with opener_dl.open(req_dl, timeout=600) as r, \
                  open(destino, "wb") as fh:
                 descargado = 0
@@ -2584,6 +2542,7 @@ class HefestosApp:
             "eclipse":  mv.get("eclipse_t", {}).get("version", ""),
             "helios":   mv.get("helios",    {}).get("version", ""),
             "hefestos": mv.get("hefestos",  {}).get("version", _HEFESTOS_VERSION),
+            "karonte":  mv.get("karonte",   {}).get("version", ""),
         }
 
     def _escribir_versiones_instaladas(self):
@@ -2601,6 +2560,7 @@ class HefestosApp:
                 "eclipse":  vers["eclipse"]  or "3.0",
                 "helios":   vers["helios"]   or "3.3.0",
                 "hefestos": vers["hefestos"] or _HEFESTOS_VERSION,
+                "karonte":  vers["karonte"]  or "0.4.0",
                 "installed_by": f"HEFESTOS v{_HEFESTOS_VERSION}",
                 "date": _dt.date.today().isoformat(),
             }
@@ -2689,10 +2649,12 @@ class HefestosApp:
                 v_hefestos = versiones.get("hefestos",  {}).get("version", "")
                 v_eclipse  = versiones.get("eclipse_t", {}).get("version", "")
                 v_helios   = versiones.get("helios",    {}).get("version", "")
+                v_karonte  = versiones.get("karonte",   {}).get("version", "")
 
                 instaladas = self._leer_versiones_instaladas()
                 e_inst = instaladas.get("eclipse", "")
                 h_inst = instaladas.get("helios",  "")
+                k_inst = instaladas.get("karonte", "")
 
                 # Solo se avisa si el repo va POR DELANTE de lo instalado (>),
                 # nunca a la baja (evita prompts falsos tras un build local nuevo).
@@ -2703,6 +2665,8 @@ class HefestosApp:
                     updates.append(("ECLIPSE-T", v_eclipse, "eclipse"))
                 if h_inst and _version_mayor(v_helios, h_inst):
                     updates.append(("HELIOS", v_helios, "helios"))
+                if k_inst and _version_mayor(v_karonte, k_inst):
+                    updates.append(("KARONTE", v_karonte, "karonte"))
 
                 if updates:
                     self.root.after(0, lambda u=updates: self._notificar_actualizaciones(u))
@@ -2716,7 +2680,7 @@ class HefestosApp:
     def _notificar_actualizaciones(self, updates: list):
         """Maneja notificaciones de actualización para uno o más componentes."""
         hef = [(n, v, t) for n, v, t in updates if t == "hefestos"]
-        apps = [(n, v, t) for n, v, t in updates if t in ("eclipse", "helios")]
+        apps = [(n, v, t) for n, v, t in updates if t in ("eclipse", "helios", "karonte")]
 
         # Actualizar label de versión con resumen
         if hasattr(self, "_lbl_version_ok"):
@@ -2827,7 +2791,7 @@ class HefestosApp:
                         "No se pudo actualizar",
                         "No se encontró copia local ni se pudo descargar.\n"
                         "Copie el nuevo HEFESTOS.exe junto a este, o descárguelo\n"
-                        "desde github.com/Faerigan/eclipse-t",
+                        "desde github.com/Faerigan/OLYMPUS/releases",
                         parent=dlg))
                 self.root.after(0, lambda: btn_dl.config(state="normal", text="  Descargar ahora  ↓  "))
                 self.root.after(0, dlg.destroy)

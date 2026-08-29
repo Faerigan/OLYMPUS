@@ -1,7 +1,7 @@
 {
-  "_version": "2.3",
-  "_fecha": "07.07.2026",
-  "_nota": "Instalacion para ejecutables .exe — sin Python requerido en equipo destino. v2.5: adquisicion LOCAL-FIRST — los .exe (github_release) se copian desde la carpeta de HEFESTOS/pendrive o bundle si difieren (hash) del instalado; GitHub release es respaldo solo si falta el exe. turbo-only, modelo large-v3-turbo.pt en raiz del install dir (junto a ECLIPSE-T.exe).",
+  "_version": "2.4",
+  "_fecha": "27.08.2026",
+  "_nota": "Instalacion para ejecutables .exe — sin Python requerido en equipo destino. v2.5: adquisicion LOCAL-FIRST — los .exe (github_release) se copian desde la carpeta de HEFESTOS/pendrive o bundle si difieren (hash) del instalado; GitHub release es respaldo solo si falta el exe. turbo-only, modelo large-v3-turbo.pt en raiz del install dir (junto a ECLIPSE-T.exe). v2.4: agregado KARONTE.exe (auditoria GES AVIS/SIGGES) — comparte geckodriver con HELIOS.",
   "grupos": [
     {
       "id": "ejecutables",
@@ -23,6 +23,14 @@
           "asset": "HELIOS.exe",
           "destino": "helios_dir",
           "mb": 81
+        },
+        {
+          "id": "dl_karonte",
+          "desc": "Instalar/actualizar KARONTE.exe (~62 MB)",
+          "tipo": "github_release",
+          "asset": "KARONTE.exe",
+          "destino": "karonte_dir",
+          "mb": 62
         }
       ]
     },
