@@ -1,0 +1,73 @@
+==============================================================
+  ECOSISTEMA OLYMPUS - Distribution Bundle
+  Actualizado: 25.09.2026 - Release olympus-v1.7
+==============================================================
+
+CONTENIDO DE ESTA CARPETA
+--------------------------
+  HEFESTOS.exe     v2.8   ( 24.3 MB)  - Instalador principal (multi-app)
+  ECLIPSE-T.exe    v3.1   (285.5 MB)  - Sistema de registros clinicos
+  HELIOS.exe       v3.4   ( 84.9 MB)  - Historial de laboratorio
+  KARONTE.exe      v0.6   ( 65.2 MB)  - Auditor GES / brecha de canastas
+  ARTEMISA.exe     v0.4   (197.5 MB)  - REM manual + consolidado mensual
+  large-v3-turbo.pt       (~950 MB)   - Modelo de voz HERMES (offline)
+  protocolos_2026.2.zip               - Protocolos clinicos (.olyproto)
+  LICENCIA.txt                        - Terminos de uso
+  Manual de Instalacion ECLIPSE-T v3.0.pdf
+                                      - Guia completa HEFESTOS+HELIOS+ECLIPSE-T
+  claves_*.txt                        - Claves de activacion asignadas
+
+INSTRUCCIONES DE INSTALACION
+-----------------------------
+1. Ejecutar HEFESTOS.exe primero.
+2. Ingresar la clave de instalacion asignada al centro.
+3. Seleccionar las apps a instalar (por defecto: ECLIPSE-T + HELIOS).
+   KARONTE y ARTEMISA son opcionales por centro.
+4. HEFESTOS descarga/copia los .exe seleccionados al destino correcto.
+5. NO ejecutar los .exe directamente desde esta carpeta - HEFESTOS
+   los ubica en la ruta esperada por el ecosistema.
+
+MANUAL DE INSTALACION
+----------------------
+"Manual de Instalacion ECLIPSE-T v3.0.pdf" cubre el flujo completo
+de HEFESTOS + HELIOS + ECLIPSE-T (instalacion + uso diario).
+Fue redactado en julio 2026; el flujo principal sigue siendo valido.
+No cubre KARONTE ni ARTEMISA (apps agregadas post-manual).
+
+VERSIONES ACTUALES (25.09.2026 - manifest.json)
+------------------------------------------------
+  HEFESTOS     2.8   - Selector multi-app + validador de claves
+  ECLIPSE-T    3.1   - Con pestana Apoyo + PCIC ECICEP + protocolos
+  HELIOS       3.4   - Historial de laboratorio (autoencadenar,
+                       CentroMemory, HCTT auto)
+  KARONTE      0.6   - Auditor SIGGES con auto_mode + homologaciones
+  ARTEMISA     0.4   - REM manual + OCR hoja + consolidado mensual
+  HERMES       3.0   - Vocabulario Whisper (pausado: HERMES_ENABLED=False)
+
+PROGRAMA REVAMPED EN DESARROLLO (Mount Olympus)
+------------------------------------------------
+El sucesor "Mount Olympus" esta en desarrollo activo desde
+septiembre 2026. Es un rewrite completo desde cero con arquitectura
+"facilitacion OVER AVIS" (capa complementaria, no reemplazo). Los
+documentos generados por Mount Olympus subiran directamente a la
+pestana Documentos de la ficha AVIS. Horizonte piloto: enero 2027.
+
+Mientras Mount Olympus madura, esta version legacy de OLYMPUS
+sigue siendo la plataforma soportada para uso clinico diario.
+
+CLAVES DE INSTALACION
+----------------------
+Contactar al Dr. Nicolas Vargas para obtener una clave asignada
+al centro. Formato: HFS-{SITE}-{YYSEQ}-{CHECK}
+  - HFS-CDT-XXXX-XXXX  - CESFAM Cerrillos de Tamaya
+  - HFS-TLT-XXXX-XXXX  - Telesalud
+  - HFS-DES-XXXX-XXXX  - DESAM Ovalle
+Cada clave es de un solo uso y se registra en SCRAP_METAL al activar.
+
+Desarrollador: Dr. Nicolas Vargas
+               CESFAM Cerrillos de Tamaya
+               n.vargas.med@gmail.com
+
+Repositorio publico: https://github.com/Faerigan/OLYMPUS
+Release actual:      olympus-v1.7
+==============================================================
